@@ -1,0 +1,6 @@
+# BadgeEvent — Fichiers à ignorer
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+.env
