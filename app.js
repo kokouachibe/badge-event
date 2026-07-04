@@ -23,39 +23,39 @@ const state = {
    ============================================= */
 const BUILT_IN_FRAMES = [
   {
-    name: 'Fête Royale',
+    name: 'Bleu Royal',
     tag: 'Concert',
-    colors: ['#f59e0b', '#dc2626'],
+    colors: ['#2563eb', '#38bdf8'],
     pattern: 'royal',
   },
   {
     name: 'Nuit Électro',
     tag: 'Soirée',
-    colors: ['#8b5cf6', '#06b6d4'],
+    colors: ['#1d4ed8', '#06b6d4'],
     pattern: 'electro',
   },
   {
     name: 'Festival',
     tag: 'Festival',
-    colors: ['#10b981', '#f59e0b'],
+    colors: ['#0ea5e9', '#818cf8'],
     pattern: 'festival',
   },
   {
     name: 'Sportif',
     tag: 'Sport',
-    colors: ['#3b82f6', '#10b981'],
+    colors: ['#2563eb', '#0ea5e9'],
     pattern: 'sport',
   },
   {
     name: 'Gala',
     tag: 'Gala',
-    colors: ['#d4af37', '#c0392b'],
+    colors: ['#38bdf8', '#1d4ed8'],
     pattern: 'gala',
   },
   {
     name: 'Culturel',
     tag: 'Culture',
-    colors: ['#e74c3c', '#f39c12'],
+    colors: ['#6366f1', '#06b6d4'],
     pattern: 'culture',
   },
 ];
@@ -111,10 +111,10 @@ function initParticles() {
     p.style.animationDelay = `-${Math.random() * 15}s`;
     p.style.opacity = Math.random() * 0.6 + 0.1;
     p.style.background = Math.random() > 0.5
-      ? 'rgba(245,158,11,0.8)'
+      ? 'rgba(37,99,235,0.9)'
       : Math.random() > 0.5
-        ? 'rgba(139,92,246,0.8)'
-        : 'rgba(255,255,255,0.6)';
+        ? 'rgba(56,189,248,0.9)'
+        : 'rgba(255,255,255,0.5)';
     container.appendChild(p);
   }
 }
@@ -326,8 +326,8 @@ function drawRoyalFrame(ctx, cx, cy, r, c1, c2, name, size) {
 
   // Outer gradient background
   const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-  bg.addColorStop(0, '#1a0010');
-  bg.addColorStop(1, '#0a0005');
+  bg.addColorStop(0, '#020c24');
+  bg.addColorStop(1, '#010614');
   ctx.fillStyle = bg;
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -424,8 +424,8 @@ function drawElectroFrame(ctx, cx, cy, r, c1, c2, name, size) {
 
   // Dark background
   const bg = ctx.createRadialGradient(cx, cy * 0.5, 0, cx, cy, r);
-  bg.addColorStop(0, '#1a0a2e');
-  bg.addColorStop(1, '#030010');
+  bg.addColorStop(0, '#020c24');
+  bg.addColorStop(1, '#01040f');
   ctx.fillStyle = bg;
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -507,15 +507,15 @@ function drawFestivalFrame(ctx, cx, cy, r, c1, c2, name, size) {
 
   // Warm background
   const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-  bg.addColorStop(0, '#1a1000');
-  bg.addColorStop(1, '#050800');
+  bg.addColorStop(0, '#020c24');
+  bg.addColorStop(1, '#010814');
   ctx.fillStyle = bg;
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fill();
 
   // Confetti dots
-  const confettiColors = [c1, c2, '#ec4899', '#8b5cf6', '#ef4444', '#ffffff'];
+  const confettiColors = [c1, c2, '#818cf8', '#06b6d4', '#38bdf8', '#ffffff'];
   for (let i = 0; i < 60; i++) {
     const angle = Math.random() * Math.PI * 2;
     const dist = r * (0.7 + Math.random() * 0.25);
@@ -607,8 +607,8 @@ function drawCultureFrame(ctx, cx, cy, r, c1, c2, name, size) {
 function drawSimpleFrame(ctx, cx, cy, r, c1, c2, name, s, label, extra) {
   // Background
   const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-  bg.addColorStop(0, '#0a0a14');
-  bg.addColorStop(1, '#000000');
+  bg.addColorStop(0, '#020c24');
+  bg.addColorStop(1, '#010614');
   ctx.fillStyle = bg;
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);

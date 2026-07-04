@@ -4,26 +4,26 @@
 
 /* ===== CUSTOM PROPERTIES ===== */
 :root {
-  /* Colors */
-  --clr-bg: #080b14;
-  --clr-bg-alt: #0d1220;
-  --clr-surface: rgba(255, 255, 255, 0.04);
-  --clr-surface-hover: rgba(255, 255, 255, 0.08);
-  --clr-border: rgba(255, 255, 255, 0.08);
-  --clr-border-hover: rgba(255, 255, 255, 0.2);
+  /* Colors — Bleu Nuit Palette */
+  --clr-bg: #020917;          /* bleu nuit profond */
+  --clr-bg-alt: #04112b;      /* bleu nuit secondaire */
+  --clr-surface: rgba(14, 60, 140, 0.12);
+  --clr-surface-hover: rgba(14, 60, 140, 0.22);
+  --clr-border: rgba(56, 130, 246, 0.15);
+  --clr-border-hover: rgba(56, 130, 246, 0.45);
 
-  /* Brand Gradients */
-  --grad-primary: linear-gradient(135deg, #f59e0b 0%, #ec4899 100%);
-  --grad-secondary: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%);
-  --grad-success: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);
-  --grad-hero: linear-gradient(135deg, #1a0533 0%, #0a1628 50%, #001a2e 100%);
+  /* Brand Gradients — Bleu Nuit */
+  --grad-primary: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%);
+  --grad-secondary: linear-gradient(135deg, #1d4ed8 0%, #0ea5e9 100%);
+  --grad-success: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%);
+  --grad-hero: linear-gradient(135deg, #020917 0%, #041530 50%, #051e3e 100%);
 
-  /* Brand Colors */
-  --clr-gold: #f59e0b;
-  --clr-pink: #ec4899;
-  --clr-purple: #8b5cf6;
-  --clr-cyan: #06b6d4;
-  --clr-green: #10b981;
+  /* Brand Colors — Bleu Nuit */
+  --clr-gold: #38bdf8;        /* bleu ciel vif — accent principal */
+  --clr-pink: #818cf8;        /* indigo clair */
+  --clr-purple: #2563eb;      /* bleu électrique */
+  --clr-cyan: #06b6d4;        /* cyan */
+  --clr-green: #0ea5e9;       /* bleu clair */
 
   /* Text */
   --txt-primary: #f8fafc;
@@ -47,11 +47,11 @@
   --r-2xl: 2rem;
   --r-full: 999px;
 
-  /* Shadows */
-  --shadow-glow-gold: 0 0 30px rgba(245, 158, 11, 0.3);
-  --shadow-glow-purple: 0 0 30px rgba(139, 92, 246, 0.3);
-  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
+  /* Shadows — Bleu Nuit */
+  --shadow-glow-gold: 0 0 30px rgba(37, 99, 235, 0.4);
+  --shadow-glow-purple: 0 0 30px rgba(56, 189, 248, 0.35);
+  --shadow-card: 0 4px 24px rgba(0, 10, 40, 0.6);
+  --shadow-lg: 0 20px 60px rgba(0, 5, 30, 0.7);
 
   /* Transitions */
   --transition-fast: 0.15s ease;
@@ -289,7 +289,7 @@ input, select { font-family: inherit; }
   flex-direction: column;
   gap: var(--sp-md);
   padding: var(--sp-md) var(--sp-lg);
-  background: rgba(8, 11, 20, 0.98);
+  background: rgba(2, 9, 23, 0.98);
   border-top: 1px solid var(--clr-border);
 }
 
@@ -328,30 +328,33 @@ input, select { font-family: inherit; }
 }
 
 .hero-orb-1 {
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(circle, #8b5cf6, transparent);
-  top: -100px;
-  right: 10%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, #1d4ed8, transparent);
+  top: -150px;
+  right: 5%;
   animation-delay: 0s;
+  opacity: 0.5;
 }
 
 .hero-orb-2 {
-  width: 300px;
-  height: 300px;
-  background: radial-gradient(circle, #f59e0b, transparent);
-  bottom: 10%;
-  left: 5%;
+  width: 350px;
+  height: 350px;
+  background: radial-gradient(circle, #0ea5e9, transparent);
+  bottom: 5%;
+  left: 3%;
   animation-delay: -3s;
+  opacity: 0.45;
 }
 
 .hero-orb-3 {
-  width: 250px;
-  height: 250px;
-  background: radial-gradient(circle, #ec4899, transparent);
-  top: 40%;
-  left: 30%;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, #38bdf8, transparent);
+  top: 35%;
+  left: 28%;
   animation-delay: -6s;
+  opacity: 0.3;
 }
 
 @keyframes orbFloat {
@@ -395,8 +398,8 @@ input, select { font-family: inherit; }
   display: inline-flex;
   align-items: center;
   gap: var(--sp-sm);
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.4);
   color: var(--clr-gold);
   padding: 0.4rem 1rem;
   border-radius: var(--r-full);
@@ -506,9 +509,9 @@ input, select { font-family: inherit; }
   animation: badgeFloat 3s ease-in-out infinite;
 }
 
-.preview-badge-1 { background: linear-gradient(135deg, #f59e0b, #ef4444); animation-delay: 0s; }
-.preview-badge-2 { background: linear-gradient(135deg, #8b5cf6, #06b6d4); animation-delay: -1s; width: 120px; height: 120px; }
-.preview-badge-3 { background: linear-gradient(135deg, #10b981, #06b6d4); animation-delay: -2s; }
+.preview-badge-1 { background: linear-gradient(135deg, #1d4ed8, #38bdf8); animation-delay: 0s; }
+.preview-badge-2 { background: linear-gradient(135deg, #2563eb, #06b6d4); animation-delay: -1s; width: 120px; height: 120px; }
+.preview-badge-3 { background: linear-gradient(135deg, #0ea5e9, #818cf8); animation-delay: -2s; }
 
 @keyframes badgeFloat {
   0%, 100% { transform: translateY(0); }
@@ -542,9 +545,9 @@ input, select { font-family: inherit; }
 
 .section-tag {
   display: inline-block;
-  background: rgba(139, 92, 246, 0.15);
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  color: var(--clr-purple);
+  background: rgba(37, 99, 235, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: var(--clr-gold);
   padding: 0.3rem 1rem;
   border-radius: var(--r-full);
   font-size: 0.8rem;
@@ -732,7 +735,7 @@ input, select { font-family: inherit; }
 .upload-zone:hover,
 .upload-zone.drag-over {
   border-color: var(--clr-gold);
-  background: rgba(245, 158, 11, 0.05);
+  background: rgba(37, 99, 235, 0.07);
 }
 
 .upload-icon {
@@ -813,12 +816,12 @@ input, select { font-family: inherit; }
   border-radius: 50%;
   background: var(--grad-primary);
   cursor: pointer;
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
   transition: box-shadow var(--transition-fast);
 }
 
 .slider::-webkit-slider-thumb:hover {
-  box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.3);
+  box-shadow: 0 0 0 6px rgba(56, 189, 248, 0.3);
 }
 
 /* Frames Grid */
@@ -846,7 +849,7 @@ input, select { font-family: inherit; }
 
 .frame-option.active {
   border-color: var(--clr-gold);
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.35);
 }
 
 .frame-option img {
@@ -909,7 +912,7 @@ input, select { font-family: inherit; }
 
 .form-input:focus {
   border-color: var(--clr-gold);
-  background: rgba(245, 158, 11, 0.05);
+  background: rgba(37, 99, 235, 0.07);
 }
 
 .form-input::placeholder {
@@ -962,7 +965,7 @@ input, select { font-family: inherit; }
 }
 
 .toggle-switch input:checked + .toggle-track {
-  background: rgba(245, 158, 11, 0.2);
+  background: rgba(37, 99, 235, 0.25);
   border-color: var(--clr-gold);
 }
 
@@ -983,7 +986,7 @@ input, select { font-family: inherit; }
   font-size: 1.05rem;
   padding: 1rem 2rem;
   border-radius: var(--r-lg);
-  box-shadow: 0 8px 30px rgba(245, 158, 11, 0.4);
+  box-shadow: 0 8px 30px rgba(37, 99, 235, 0.45);
 }
 
 .share-buttons {}
@@ -1107,16 +1110,16 @@ input, select { font-family: inherit; }
   display: inline-flex;
   align-items: center;
   gap: var(--sp-xs);
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  color: var(--clr-green);
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: var(--clr-gold);
   padding: 0.3rem 0.8rem;
   border-radius: var(--r-full);
   font-size: 0.75rem;
   font-weight: 600;
 }
 
-.info-badge svg { fill: var(--clr-green); }
+.info-badge svg { fill: var(--clr-gold); }
 
 /* ===== FRAMES SHOWCASE ===== */
 .frames-showcase {
@@ -1231,7 +1234,7 @@ input, select { font-family: inherit; }
 }
 
 .faq-item:hover { border-color: var(--clr-border-hover); }
-.faq-item.open { border-color: rgba(139, 92, 246, 0.4); }
+.faq-item.open { border-color: rgba(37, 99, 235, 0.55); }
 
 .faq-question {
   width: 100%;
@@ -1258,7 +1261,7 @@ input, select { font-family: inherit; }
   color: var(--txt-muted);
 }
 
-.faq-item.open .faq-icon { transform: rotate(180deg); color: var(--clr-purple); }
+.faq-item.open .faq-icon { transform: rotate(180deg); color: var(--clr-gold); }
 
 .faq-answer {
   max-height: 0;
@@ -1340,8 +1343,8 @@ input, select { font-family: inherit; }
   position: fixed;
   bottom: 2rem;
   right: 2rem;
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.4);
+  background: rgba(37, 99, 235, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.45);
   backdrop-filter: blur(20px);
   border-radius: var(--r-lg);
   padding: var(--sp-md) var(--sp-lg);
