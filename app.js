@@ -1314,24 +1314,29 @@ function loadOrgFrameFile(file) {
       orgState.frame = img;
       orgState.frameBase64Original = e.target.result;
       
-      // Compress frame for URL portability
-      compressFrameForURL(img, (compressedBase64) => {
-        orgState.frameBase64 = compressedBase64;
-        document.getElementById('generateCampaignBtn').disabled = false;
+      // 1) Comprimer en JPEG pour le fallback URL (petit, mais sans transparence)
+      compressFrameForURL(img, (jpegBase64) => {
+        orgState.frameBase64 = jpegBase64;
         
-        // Show success in upload zone
-        document.getElementById('orgUploadZone').innerHTML = `
-          <div class="upload-success">
-            <div style="font-size:2.5rem">🖼️</div>
-            <p style="font-weight:600;margin:0.5rem 0">Cadre chargé !</p>
-            <p style="font-size:0.8rem;color:var(--txt-muted)">Dimensions: ${img.width}x${img.height}px</p>
-            <button class="btn btn-ghost btn-sm" style="margin-top:0.5rem" onclick="document.getElementById('orgFrameInput').click()">
-              Changer de cadre
-            </button>
-          </div>
-        `;
-        
-        updateOrgPreview();
+        // 2) Comprimer en PNG pour le stockage en ligne (plus grand, MAIS transparent)
+        compressFrameAsPNG(img, (pngBase64) => {
+          orgState.frameBase64PNG = pngBase64;
+          document.getElementById('generateCampaignBtn').disabled = false;
+          
+          // Show success in upload zone
+          document.getElementById('orgUploadZone').innerHTML = `
+            <div class="upload-success">
+              <div style="font-size:2.5rem">🖼️</div>
+              <p style="font-weight:600;margin:0.5rem 0">Cadre chargé !</p>
+              <p style="font-size:0.8rem;color:var(--txt-muted)">Dimensions: ${img.width}x${img.height}px</p>
+              <button class="btn btn-ghost btn-sm" style="margin-top:0.5rem" onclick="document.getElementById('orgFrameInput').click()">
+                Changer de cadre
+              </button>
+            </div>
+          `;
+          
+          updateOrgPreview();
+        });
       });
     };
     img.src = e.target.result;
@@ -1343,13 +1348,12 @@ function compressFrameForURL(img, callback) {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   
-  // Use 150x150 JPEG (quality 0.45) — much smaller than PNG 250x250
-  // A typical badge PNG frame at 150px JPEG 0.45 is ~8-15KB in Base64
+  // 150x150 JPEG (quality 0.45) — réservé au fallback URL (#event=)
+  // ATTENTION : JPEG ne supporte pas la transparence !
   const size = 150;
   canvas.width = size;
   canvas.height = size;
   
-  // Fit image preserving aspect ratio
   const scale = Math.min(size / img.width, size / img.height);
   const w = img.width * scale;
   const h = img.height * scale;
@@ -1357,8 +1361,35 @@ function compressFrameForURL(img, callback) {
   const y = (size - h) / 2;
   
   ctx.drawImage(img, x, y, w, h);
-  // JPEG instead of PNG = 5-10x smaller file size
   callback(canvas.toDataURL('image/jpeg', 0.45));
+}
+
+/**
+ * Compresse le cadre en PNG (TRANSPARENT) pour le stockage en ligne (npoint.io).
+ * PNG préserve le canal alpha — essentiel pour que le cadre s’affiche correctement
+ * en superposition sur la photo du participant, quel que soit son appareil.
+ */
+function compressFrameAsPNG(img, callback) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  
+  // 350x350 PNG : bon compromis qualité / taille pour npoint.io
+  // Un PNG badge typique à 350px ≈ 40-80 Ko en base64
+  const size = 350;
+  canvas.width = size;
+  canvas.height = size;
+  
+  // Laisser le fond transparent (ne PAS remplir de couleur)
+  ctx.clearRect(0, 0, size, size);
+  
+  const scale = Math.min(size / img.width, size / img.height);
+  const w = img.width * scale;
+  const h = img.height * scale;
+  const ox = (size - w) / 2;
+  const oy = (size - h) / 2;
+  
+  ctx.drawImage(img, ox, oy, w, h);
+  callback(canvas.toDataURL('image/png')); // PNG = transparence préservée
 }
 
 function drawCheckerboard(ctx, size) {
@@ -1603,10 +1634,13 @@ async function generateCampaignLink() {
 
     try {
       btn.innerHTML = `<span>⏳</span> Connexion au service en ligne...`;
+      // Utiliser le PNG transparent pour le stockage en ligne
+      // (JPEG = pas de transparence → cadre illisible sur les autres appareils)
+      const onlineData = { ...campaignData, f: orgState.frameBase64PNG || campaignData.f };
       const response = await fetch('https://api.npoint.io', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(campaignData),
+        body: JSON.stringify(onlineData),
         signal: AbortSignal.timeout(6000)
       });
       if (response.ok) {
