@@ -56,7 +56,7 @@ function checkUrlParameters() {
   const hash = window.location.hash;
 
   if (hash.startsWith('#event=')) {
-    const eventB64 = hash.slice('#event='.length);
+    const eventB64 = decodeURIComponent(hash.slice('#event='.length));
     if (!eventB64) return;
     try {
       const data = CampaignStore.decodeFromBase64(eventB64);

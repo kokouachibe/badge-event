@@ -1642,22 +1642,20 @@ async function generateCampaignLink() {
     btn.innerHTML = `<span>⏳</span> Préparation du lien participant...`;
 
     let localId = null;
-    let linkType = 'local';
+    let linkType = 'base64';
 
     try {
       localId = await CampaignStore.save(campaignData);
-      linkType = 'local';
     } catch (e) {
-      console.warn('Sauvegarde locale impossible, repli base64 :', e.message || e);
+      console.warn('Sauvegarde locale impossible, utilisation du lien universel :', e.message || e);
     }
 
-    let link;
+    const b64 = CampaignStore.encodeToBase64(campaignData);
+    const linkHash = `#event=${encodeURIComponent(b64)}`;
+    const link = getParticipantPageUrl(linkHash);
+
     if (localId) {
-      link = getParticipantPageUrl(`#lid=${localId}`);
-    } else {
-      const b64 = CampaignStore.encodeToBase64(campaignData);
-      link = getParticipantPageUrl(`#event=${b64}`);
-      linkType = 'base64';
+      linkType = 'local';
     }
 
     // Afficher le lien principal
@@ -1668,9 +1666,9 @@ async function generateCampaignLink() {
     const infoBanner = document.getElementById('linkTypeBanner');
     if (infoBanner) {
       if (linkType === 'local') {
-        infoBanner.innerHTML = `<span class="link-type-badge link-type-local">✅ Lien participant généré</span> Le lien est prêt à être partagé avec vos participants.`;
+        infoBanner.innerHTML = `<span class="link-type-badge link-type-local">✅ Lien participant généré</span> Le lien universel est prêt à être partagé avec vos participants.`;
       } else {
-        infoBanner.innerHTML = `<span class="link-type-badge link-type-base64">🔗 Lien de secours (Données encodées)</span> Ce lien fonctionne sur tous les appareils, même sans stockage local.`;
+        infoBanner.innerHTML = `<span class="link-type-badge link-type-base64">🔗 Lien universel</span> Ce lien fonctionne sur tous les appareils, même sans stockage local.`;
       }
       infoBanner.style.display = 'flex';
     }
@@ -1686,7 +1684,7 @@ async function generateCampaignLink() {
 
     showToast(
       "Campagne créée ! 🚀",
-      linkType === 'local' ? "Lien participant prêt à partager." : "Lien de secours généré."
+      "Lien universel prêt à être partagé."
     );
 
   } catch (error) {
