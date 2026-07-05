@@ -1560,9 +1560,20 @@ function initOrgCanvasDrag() {
   }
 }
 
-/* =============================================
-   CAMPAIGN LINK GENERATOR
-   ============================================= */
+/**
+ * Construit l'URL absolue menant à participant.html en conservant le bon chemin d'accès.
+ */
+function getParticipantPageUrl(hashValue) {
+  let path = window.location.pathname;
+  if (path.endsWith('index.html')) {
+    path = path.slice(0, -10); // Retirer index.html
+  }
+  if (!path.endsWith('/')) {
+    path += '/';
+  }
+  return `${window.location.origin}${path}participant.html${hashValue}`;
+}
+
 async function generateCampaignLink() {
   orgState.eventName = document.getElementById('orgEventName').value.trim();
   orgState.description = document.getElementById('orgDescription').value.trim();
