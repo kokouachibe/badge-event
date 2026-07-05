@@ -296,7 +296,7 @@ function initFrames() {
 }
 
 function loadFirstFrame() {
-  const hasCampaign = window.location.hash.startsWith('#event=');
+  const hasCampaign = window.location.hash.startsWith('#event=') || window.location.hash.startsWith('#id=');
   if (hasCampaign) return; // Skip loading default built-in frame if in campaign mode
 
   const firstFrame = BUILT_IN_FRAMES[0];
@@ -1530,7 +1530,7 @@ function initOrgCanvasDrag() {
 /* =============================================
    CAMPAIGN LINK GENERATOR
    ============================================= */
-function generateCampaignLink() {
+async function generateCampaignLink() {
   orgState.eventName = document.getElementById('orgEventName').value.trim();
   orgState.description = document.getElementById('orgDescription').value.trim();
   orgState.startDate = document.getElementById('orgStartDate').value;
@@ -1563,6 +1563,11 @@ function generateCampaignLink() {
     return;
   }
 
+  const btn = document.getElementById('generateCampaignBtn');
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<span>⏳</span> Génération du lien court...`;
+
   const campaignData = {
     n: orgState.eventName,
     d: orgState.description,
@@ -1590,12 +1595,30 @@ function generateCampaignLink() {
   };
 
   try {
-    const jsonStr = JSON.stringify(campaignData);
-    // Base64 encoding supporting unicode
-    const b64 = btoa(unescape(encodeURIComponent(jsonStr)));
-    // Use URL HASH (#event=...) instead of query param (?event=...)
-    // Hash is NEVER sent to the server → no "URI Too Long" error
-    const link = `${window.location.origin}${window.location.pathname}#event=${b64}`;
+    let shortId = null;
+    try {
+      const response = await fetch('https://api.npoint.io', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(campaignData)
+      });
+      if (response.ok) {
+        const res = await response.json();
+        shortId = res.id;
+      }
+    } catch (e) {
+      console.warn("Échec d'enregistrement en ligne (npoint.io), repli sur le lien local :", e);
+    }
+
+    let link;
+    if (shortId) {
+      link = `${window.location.origin}${window.location.pathname}#id=${shortId}`;
+    } else {
+      // Fallback: old local system
+      const jsonStr = JSON.stringify(campaignData);
+      const b64 = btoa(unescape(encodeURIComponent(jsonStr)));
+      link = `${window.location.origin}${window.location.pathname}#event=${b64}`;
+    }
     
     document.getElementById('generatedLinkInput').value = link;
     document.getElementById('campaignLinkResult').style.display = 'block';
@@ -1609,10 +1632,16 @@ function generateCampaignLink() {
       localStorage.setItem(`counter_${eventId}`, orgState.startNumber);
     }
     
-    showToast("Campagne créée ! 🚀", "Le lien participant est disponible.");
+    showToast(
+      "Campagne créée ! 🚀", 
+      shortId ? "Lien court professionnel disponible." : "Service en ligne injoignable. Lien local de secours généré."
+    );
   } catch (error) {
     console.error("Génération de campagne ratée:", error);
     showToast("Erreur", "Impossible de générer le lien de campagne.", "error");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalText;
   }
 }
 
@@ -1650,21 +1679,45 @@ const pState = {
 let pActiveDrag = null;
 
 function checkUrlParameters() {
-  // Read from URL hash (#event=...) — hash is client-side only, no server limit
   const hash = window.location.hash;
-  const prefix = '#event=';
-  if (!hash.startsWith(prefix)) return;
   
-  const eventB64 = hash.slice(prefix.length);
-  if (!eventB64) return;
-  
+  if (hash.startsWith('#event=')) {
+    const eventB64 = hash.slice('#event='.length);
+    if (!eventB64) return;
+    try {
+      const decodedJson = decodeURIComponent(escape(atob(eventB64)));
+      const data = JSON.parse(decodedJson);
+      bootParticipantMode(data);
+    } catch (e) {
+      console.error("URL decoding failed:", e);
+      showToast("Lien invalide", "Les paramètres de l'événement sont corrompus.", "error");
+    }
+  } else if (hash.startsWith('#id=')) {
+    const campaignId = hash.slice('#id='.length);
+    if (!campaignId) return;
+    
+    // Show overlay immediately with loading state
+    document.getElementById('participantOverlay').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    
+    // Temporary loading indicator
+    document.getElementById('pEventName').textContent = "Chargement de la campagne...";
+    document.getElementById('pEventDescription').textContent = "Récupération des informations depuis le serveur de badges...";
+    
+    fetchCampaignFromStore(campaignId);
+  }
+}
+
+async function fetchCampaignFromStore(id) {
   try {
-    const decodedJson = decodeURIComponent(escape(atob(eventB64)));
-    const data = JSON.parse(decodedJson);
+    const response = await fetch(`https://api.npoint.io/${id}`);
+    if (!response.ok) throw new Error('Failed to fetch campaign data');
+    const data = await response.json();
     bootParticipantMode(data);
-  } catch (e) {
-    console.error("URL decoding failed:", e);
-    showToast("Lien invalide", "Les paramètres de l'événement sont corrompus.", "error");
+  } catch (error) {
+    console.error("Failed to load campaign from npoint:", error);
+    showToast("Erreur", "Impossible de charger la campagne. Le lien a peut-être expiré ou le service est indisponible.", "error");
+    closeParticipantOverlay();
   }
 }
 
@@ -2214,7 +2267,7 @@ function showToast(title, message, type = 'success') {
    ON LOAD – draw preview with frame only
    ============================================= */
 window.addEventListener('load', () => {
-  const hasCampaign = window.location.hash.startsWith('#event=');
+  const hasCampaign = window.location.hash.startsWith('#event=') || window.location.hash.startsWith('#id=');
   if (hasCampaign) return; // Skip default initial preview loading if in campaign mode
 
   // Auto-trigger initial preview with just the frame
