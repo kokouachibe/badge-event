@@ -296,7 +296,7 @@ function initFrames() {
 }
 
 function loadFirstFrame() {
-  const hasCampaign = new URLSearchParams(window.location.search).has('event');
+  const hasCampaign = window.location.hash.startsWith('#event=');
   if (hasCampaign) return; // Skip loading default built-in frame if in campaign mode
 
   const firstFrame = BUILT_IN_FRAMES[0];
@@ -1341,8 +1341,9 @@ function compressFrameForURL(img, callback) {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   
-  // 250x250 px is small enough to generate a very small Base64 string (~10KB)
-  const size = 250;
+  // Use 150x150 JPEG (quality 0.45) — much smaller than PNG 250x250
+  // A typical badge PNG frame at 150px JPEG 0.45 is ~8-15KB in Base64
+  const size = 150;
   canvas.width = size;
   canvas.height = size;
   
@@ -1354,7 +1355,8 @@ function compressFrameForURL(img, callback) {
   const y = (size - h) / 2;
   
   ctx.drawImage(img, x, y, w, h);
-  callback(canvas.toDataURL('image/png'));
+  // JPEG instead of PNG = 5-10x smaller file size
+  callback(canvas.toDataURL('image/jpeg', 0.45));
 }
 
 function drawCheckerboard(ctx, size) {
@@ -1591,7 +1593,9 @@ function generateCampaignLink() {
     const jsonStr = JSON.stringify(campaignData);
     // Base64 encoding supporting unicode
     const b64 = btoa(unescape(encodeURIComponent(jsonStr)));
-    const link = `${window.location.origin}${window.location.pathname}?event=${b64}`;
+    // Use URL HASH (#event=...) instead of query param (?event=...)
+    // Hash is NEVER sent to the server → no "URI Too Long" error
+    const link = `${window.location.origin}${window.location.pathname}#event=${b64}`;
     
     document.getElementById('generatedLinkInput').value = link;
     document.getElementById('campaignLinkResult').style.display = 'block';
@@ -1646,18 +1650,21 @@ const pState = {
 let pActiveDrag = null;
 
 function checkUrlParameters() {
-  const params = new URLSearchParams(window.location.search);
-  const eventB64 = params.get('event');
+  // Read from URL hash (#event=...) — hash is client-side only, no server limit
+  const hash = window.location.hash;
+  const prefix = '#event=';
+  if (!hash.startsWith(prefix)) return;
   
-  if (eventB64) {
-    try {
-      const decodedJson = decodeURIComponent(escape(atob(eventB64)));
-      const data = JSON.parse(decodedJson);
-      bootParticipantMode(data);
-    } catch (e) {
-      console.error("URL decoding failed:", e);
-      showToast("Lien invalide", "Les paramètres de l'événement sont corrompus.", "error");
-    }
+  const eventB64 = hash.slice(prefix.length);
+  if (!eventB64) return;
+  
+  try {
+    const decodedJson = decodeURIComponent(escape(atob(eventB64)));
+    const data = JSON.parse(decodedJson);
+    bootParticipantMode(data);
+  } catch (e) {
+    console.error("URL decoding failed:", e);
+    showToast("Lien invalide", "Les paramètres de l'événement sont corrompus.", "error");
   }
 }
 
@@ -2207,7 +2214,7 @@ function showToast(title, message, type = 'success') {
    ON LOAD – draw preview with frame only
    ============================================= */
 window.addEventListener('load', () => {
-  const hasCampaign = new URLSearchParams(window.location.search).has('event');
+  const hasCampaign = window.location.hash.startsWith('#event=');
   if (hasCampaign) return; // Skip default initial preview loading if in campaign mode
 
   // Auto-trigger initial preview with just the frame
