@@ -379,18 +379,78 @@
 @media (max-width: 1024px) {
   .organizer-layout {
     grid-template-columns: 1fr;
+    gap: var(--sp-lg);
   }
   .org-preview-panel { position: static; order: -1; }
   .org-canvas-container { max-width: 480px; margin: 0 auto; }
 
   .participant-gen-layout {
     grid-template-columns: 1fr;
+    gap: var(--sp-lg);
   }
-  .p-preview { position: static; }
+  .p-preview { position: static; order: -1; }
 }
 
 @media (max-width: 768px) {
   .form-row { grid-template-columns: 1fr; }
-  .banner-inner { flex-direction: column; }
-  .banner-stats { width: 100%; flex-direction: row; }
+  .banner-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-md);
+  }
+  .banner-stats {
+    width: 100%;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--sp-md);
+  }
+  .banner-stats-number {
+    font-size: 2rem;
+  }
+  .participant-generator {
+    padding: 1.5rem var(--sp-md);
+  }
+}
+
+@media (max-width: 480px) {
+  .participant-event-banner {
+    padding: 1.5rem var(--sp-md);
+  }
+  .banner-close-btn {
+    top: -5px;
+    right: -5px;
+    width: 32px;
+    height: 32px;
+  }
+  .banner-badge-icon {
+    width: 56px;
+    height: 56px;
+    font-size: 1.5rem;
+  }
+  .banner-event-name {
+    font-size: 1.4rem;
+  }
+  .banner-desc {
+    font-size: 0.85rem;
+  }
+  .banner-stats {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 2px;
+  }
+  .participant-generator {
+    padding: 1rem var(--sp-sm);
+  }
+  .participant-gen-layout {
+    gap: var(--sp-md);
+  }
+  .org-card {
+    padding: var(--sp-md);
+  }
+  .link-info {
+    font-size: 0.75rem;
+    padding: var(--sp-sm);
+  }
 }

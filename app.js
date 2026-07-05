@@ -296,7 +296,9 @@ function initFrames() {
 }
 
 function loadFirstFrame() {
-  const hasCampaign = window.location.hash.startsWith('#event=') || window.location.hash.startsWith('#id=');
+  const hasCampaign = window.location.hash.startsWith('#event=')
+                   || window.location.hash.startsWith('#id=')
+                   || window.location.hash.startsWith('#lid=');
   if (hasCampaign) return; // Skip loading default built-in frame if in campaign mode
 
   const firstFrame = BUILT_IN_FRAMES[0];
@@ -1589,56 +1591,106 @@ async function generateCampaignLink() {
     nuc: orgState.numberColor,
     nus: orgState.numberSize,
     nuf: orgState.numberFont,
-    numX: orgState.numberX,   // position X du numéro
-    numY: orgState.numberY,   // position Y du numéro
-    f: orgState.frameBase64 // compressed low-res base64 image
+    numX: orgState.numberX,
+    numY: orgState.numberY,
+    f: orgState.frameBase64
   };
 
   try {
+    // ── Niveau 1 : npoint.io (lien universel court) ──────────────────
     let shortId = null;
+    let linkType = 'local'; // 'npoint' | 'local' | 'base64'
+
     try {
+      btn.innerHTML = `<span>⏳</span> Connexion au service en ligne...`;
       const response = await fetch('https://api.npoint.io', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(campaignData)
+        body: JSON.stringify(campaignData),
+        signal: AbortSignal.timeout(6000)
       });
       if (response.ok) {
         const res = await response.json();
         shortId = res.id;
+        linkType = 'npoint';
       }
     } catch (e) {
-      console.warn("Échec d'enregistrement en ligne (npoint.io), repli sur le lien local :", e);
+      console.warn('npoint.io indisponible, repli sur IndexedDB local :', e.message);
     }
 
+    // ── Niveau 2 : IndexedDB local (lien court, même navigateur) ─────
+    let localId = null;
+    if (!shortId) {
+      try {
+        btn.innerHTML = `<span>⏳</span> Sauvegarde locale en cours...`;
+        localId = await CampaignStore.save(campaignData);
+        linkType = 'local';
+      } catch (e) {
+        console.warn('IndexedDB indisponible, repli base64 :', e.message);
+      }
+    }
+
+    // ── Niveau 3 : base64 URL (dernier recours) ──────────────────────
     let link;
+    let universalLink; // toujours généré pour l'option de partage
+
+    // Générer le lien universel base64 (pour partage multi-appareils)
+    const b64 = CampaignStore.encodeToBase64(campaignData);
+    universalLink = `${window.location.origin}${window.location.pathname}#event=${b64}`;
+
     if (shortId) {
       link = `${window.location.origin}${window.location.pathname}#id=${shortId}`;
+    } else if (localId) {
+      link = `${window.location.origin}${window.location.pathname}#lid=${localId}`;
     } else {
-      // Fallback: old local system
-      const jsonStr = JSON.stringify(campaignData);
-      const b64 = btoa(unescape(encodeURIComponent(jsonStr)));
-      link = `${window.location.origin}${window.location.pathname}#event=${b64}`;
+      link = universalLink;
+      linkType = 'base64';
     }
-    
+
+    // Afficher le lien principal
     document.getElementById('generatedLinkInput').value = link;
     document.getElementById('campaignLinkResult').style.display = 'block';
-    
-    // Backup high-res in localStorage for local testing
+
+    // Afficher la bannière d'info selon le type
+    const infoBanner = document.getElementById('linkTypeBanner');
+    if (infoBanner) {
+      if (linkType === 'npoint') {
+        infoBanner.innerHTML = `<span class="link-type-badge link-type-online">✅ Lien universel court</span> Fonctionne sur tous les appareils.`;
+      } else if (linkType === 'local') {
+        infoBanner.innerHTML = `<span class="link-type-badge link-type-local">⚠️ Lien local</span> Ce lien ne fonctionne que sur <strong>ce navigateur</strong>. Partagez le <strong>Lien universel</strong> ci-dessous avec vos participants.`;
+      } else {
+        infoBanner.innerHTML = `<span class="link-type-badge link-type-base64">🔗 Lien universel long</span> Service en ligne indisponible. Ce lien est long mais fonctionne partout.`;
+      }
+      infoBanner.style.display = 'flex';
+    }
+
+    // Toujours afficher le lien universel de partage
+    const universalInput = document.getElementById('universalLinkInput');
+    const universalSection = document.getElementById('universalLinkSection');
+    if (universalInput && universalSection) {
+      universalInput.value = universalLink;
+      universalSection.style.display = linkType !== 'npoint' ? 'block' : 'none';
+    }
+
+    // Backup haute résolution dans localStorage
     const eventId = generateEventId(orgState.eventName);
     localStorage.setItem(`camp_highres_${eventId}`, orgState.frameBase64Original);
-    
-    // Initialize participant counter in localStorage
+
+    // Initialiser le compteur si nécessaire
     if (localStorage.getItem(`counter_${eventId}`) === null) {
       localStorage.setItem(`counter_${eventId}`, orgState.startNumber);
     }
-    
-    showToast(
-      "Campagne créée ! 🚀", 
-      shortId ? "Lien court professionnel disponible." : "Service en ligne injoignable. Lien local de secours généré."
-    );
+
+    const toastMessages = {
+      npoint : 'Lien universel court disponible. 🌍',
+      local  : 'Lien local créé. Utilisez le lien universel pour partager.',
+      base64 : 'Service hors ligne. Lien de secours généré.'
+    };
+    showToast('Campagne créée ! 🚀', toastMessages[linkType]);
+
   } catch (error) {
-    console.error("Génération de campagne ratée:", error);
-    showToast("Erreur", "Impossible de générer le lien de campagne.", "error");
+    console.error('Génération de campagne ratée :', error);
+    showToast('Erreur', 'Impossible de générer le lien de campagne.', 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = originalText;
@@ -1650,6 +1702,14 @@ function copyCampaignLink() {
   input.select();
   document.execCommand('copy');
   showToast("Copié !", "Lien copié dans le presse-papiers.");
+}
+
+function copyUniversalLink() {
+  const input = document.getElementById('universalLinkInput');
+  if (!input || !input.value) return;
+  input.select();
+  document.execCommand('copy');
+  showToast("Lien universel copié !", "Partagez ce lien avec vos participants.");
 }
 
 function testParticipantLink() {
@@ -1680,45 +1740,94 @@ let pActiveDrag = null;
 
 function checkUrlParameters() {
   const hash = window.location.hash;
-  
+
+  // ── Lien base64 universel (ancien système + partage multi-appareils) ──
   if (hash.startsWith('#event=')) {
     const eventB64 = hash.slice('#event='.length);
     if (!eventB64) return;
     try {
-      const decodedJson = decodeURIComponent(escape(atob(eventB64)));
-      const data = JSON.parse(decodedJson);
+      const data = CampaignStore.decodeFromBase64(eventB64);
+      // Migrer automatiquement vers IndexedDB local et mettre à jour l'URL
+      migrateEventToLocal(data);
       bootParticipantMode(data);
     } catch (e) {
-      console.error("URL decoding failed:", e);
-      showToast("Lien invalide", "Les paramètres de l'événement sont corrompus.", "error");
+      console.error('URL decoding failed:', e);
+      showToast('Lien invalide', "Les paramètres de l'événement sont corrompus.", 'error');
     }
+
+  // ── Lien court npoint.io (service en ligne) ───────────────────────
   } else if (hash.startsWith('#id=')) {
     const campaignId = hash.slice('#id='.length);
     if (!campaignId) return;
-    
-    // Show overlay immediately with loading state
-    document.getElementById('participantOverlay').style.display = 'flex';
-    document.body.style.overflow = 'hidden';
-    
-    // Temporary loading indicator
-    document.getElementById('pEventName').textContent = "Chargement de la campagne...";
-    document.getElementById('pEventDescription').textContent = "Récupération des informations depuis le serveur de badges...";
-    
-    fetchCampaignFromStore(campaignId);
+    showParticipantOverlayLoading('Chargement de la campagne...', 'Récupération des informations...');
+    fetchCampaignFromNpoint(campaignId);
+
+  // ── Lien court local IndexedDB (même navigateur) ──────────────────
+  } else if (hash.startsWith('#lid=')) {
+    const localId = hash.slice('#lid='.length);
+    if (!localId) return;
+    showParticipantOverlayLoading('Chargement de la campagne...', 'Récupération depuis le stockage local...');
+    fetchCampaignFromLocal(localId);
   }
 }
 
-async function fetchCampaignFromStore(id) {
+/** Affiche l'overlay en état de chargement */
+function showParticipantOverlayLoading(title, desc) {
+  document.getElementById('participantOverlay').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  document.getElementById('pEventName').textContent = title;
+  document.getElementById('pEventDescription').textContent = desc;
+}
+
+/** Charge depuis npoint.io (Niveau 1 – universel) */
+async function fetchCampaignFromNpoint(id) {
   try {
-    const response = await fetch(`https://api.npoint.io/${id}`);
-    if (!response.ok) throw new Error('Failed to fetch campaign data');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const response = await fetch(`https://api.npoint.io/${id}`, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
+    // Aussi sauvegarder en local pour les prochaines visites
+    CampaignStore.save(data).catch(() => {});
     bootParticipantMode(data);
   } catch (error) {
-    console.error("Failed to load campaign from npoint:", error);
-    showToast("Erreur", "Impossible de charger la campagne. Le lien a peut-être expiré ou le service est indisponible.", "error");
+    console.error('npoint.io inaccessible :', error.message);
+    showToast('Erreur de connexion', 'Impossible de charger la campagne depuis le service en ligne. Réessayez plus tard.', 'error');
     closeParticipantOverlay();
   }
+}
+
+/** Charge depuis IndexedDB local (Niveau 2 – même navigateur) */
+async function fetchCampaignFromLocal(id) {
+  try {
+    const data = await CampaignStore.load(id);
+    if (!data) throw new Error('Campaign not found in local store');
+    bootParticipantMode(data);
+  } catch (error) {
+    console.error('IndexedDB load failed :', error.message);
+    showToast('Campagne introuvable', 'Ce lien local ne fonctionne que sur le navigateur qui a créé la campagne.', 'error');
+    closeParticipantOverlay();
+  }
+}
+
+/** Migration automatique base64 → IndexedDB local */
+async function migrateEventToLocal(data) {
+  try {
+    const localId = await CampaignStore.save(data);
+    const newUrl = `${window.location.origin}${window.location.pathname}#lid=${localId}`;
+    // Silently update URL without reload
+    window.history.replaceState({}, '', newUrl);
+    console.info('Campagne migrée vers IndexedDB local, ID :', localId);
+  } catch (e) {
+    // Non-fatal: old link still works
+    console.warn('Migration IndexedDB échouée (non-bloquant) :', e.message);
+  }
+}
+
+/** Alias pour compatibilité descendante */
+async function fetchCampaignFromStore(id) {
+  return fetchCampaignFromNpoint(id);
 }
 
 function bootParticipantMode(data) {
@@ -2267,7 +2376,9 @@ function showToast(title, message, type = 'success') {
    ON LOAD – draw preview with frame only
    ============================================= */
 window.addEventListener('load', () => {
-  const hasCampaign = window.location.hash.startsWith('#event=') || window.location.hash.startsWith('#id=');
+  const hasCampaign = window.location.hash.startsWith('#event=')
+                   || window.location.hash.startsWith('#id=')
+                   || window.location.hash.startsWith('#lid=');
   if (hasCampaign) return; // Skip default initial preview loading if in campaign mode
 
   // Auto-trigger initial preview with just the frame

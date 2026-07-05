@@ -602,14 +602,29 @@
                 <div class="section-divider-line"></div>
               </div>
 
+              <!-- Bannière type de lien -->
+              <div class="link-type-banner" id="linkTypeBanner" style="display:none"></div>
+
               <div class="link-info">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-                <span>Partagez le lien ci-dessous avec vos participants pour qu'ils créent leur badge :</span>
+                <span>Lien principal à utiliser :</span>
               </div>
 
               <div class="link-box">
                 <input type="text" class="link-input" id="generatedLinkInput" readonly value="" onclick="this.select()" />
-                <button class="btn btn-primary btn-sm" onclick="copyCampaignLink()">Copier le lien</button>
+                <button class="btn btn-primary btn-sm" onclick="copyCampaignLink()">Copier</button>
+              </div>
+
+              <!-- Lien universel de partage (affiché si lien local) -->
+              <div id="universalLinkSection" style="display:none; margin-top: var(--sp-md);">
+                <div class="link-info" style="margin-top:0">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
+                  <span><strong>Lien universel</strong> – à partager avec vos participants (fonctionne sur tous les appareils) :</span>
+                </div>
+                <div class="link-box">
+                  <input type="text" class="link-input" id="universalLinkInput" readonly value="" onclick="this.select()" />
+                  <button class="btn btn-primary btn-sm" onclick="copyUniversalLink()">Copier</button>
+                </div>
               </div>
 
               <button class="btn link-download-btn" onclick="testParticipantLink()">
@@ -939,6 +954,7 @@
     </div>
   </div>
 
+  <script src="campaign-store.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
