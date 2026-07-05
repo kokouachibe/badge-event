@@ -46,6 +46,8 @@ const orgState = {
   frame: null,
   frameBase64: '',
   frameBase64Original: '', // backup high resolution
+  frameMode: 'built-in',
+  frameKey: '',
   redirectUrl: '',
   collectEmail: false,
   whatsappReminder: false,
@@ -318,6 +320,8 @@ function selectFrame(index, dataURL, clickedEl) {
 
   // Load frame
   const frame = BUILT_IN_FRAMES[index];
+  orgState.frameMode = 'built-in';
+  orgState.frameKey = frame.pattern;
   const frameCanvas = generateFrameCanvas(frame, 1000);
   const img = new Image();
   img.src = frameCanvas.toDataURL('image/png');
@@ -330,6 +334,8 @@ function selectFrame(index, dataURL, clickedEl) {
 
 function selectFrameFromShowcase(index, dataURL) {
   const frame = BUILT_IN_FRAMES[index];
+  orgState.frameMode = 'built-in';
+  orgState.frameKey = frame.pattern;
   const frameCanvas = generateFrameCanvas(frame, 1000);
   const img = new Image();
   img.src = frameCanvas.toDataURL('image/png');
@@ -1313,6 +1319,8 @@ function loadOrgFrameFile(file) {
     img.onload = () => {
       orgState.frame = img;
       orgState.frameBase64Original = e.target.result;
+      orgState.frameMode = 'custom';
+      orgState.frameKey = '';
       
       // 1) Comprimer en JPEG pour le fallback URL (petit, mais sans transparence)
       compressFrameForURL(img, (jpegBase64) => {
@@ -1350,7 +1358,7 @@ function compressFrameForURL(img, callback) {
   
   // Taille plus petite et encodage plus compact pour garder l’URL compatible
   // sur les navigateurs mobiles Android qui sont plus sensibles aux URLs longues.
-  const size = 180;
+  const size = 140;
   canvas.width = size;
   canvas.height = size;
   
@@ -1361,7 +1369,7 @@ function compressFrameForURL(img, callback) {
   const y = (size - h) / 2;
   
   ctx.drawImage(img, x, y, w, h);
-  callback(canvas.toDataURL('image/webp', 0.72));
+  callback(canvas.toDataURL('image/webp', 0.60));
 }
 
 /**
@@ -1574,6 +1582,16 @@ function getParticipantPageUrl(hashValue) {
   return `${window.location.origin}${path}participant.html${hashValue}`;
 }
 
+function buildCampaignFramePayload() {
+  if (orgState.frameMode === 'built-in' && orgState.frameKey) {
+    return `builtin:${orgState.frameKey}`;
+  }
+  if (orgState.frameBase64) {
+    return `custom:${orgState.frameBase64}`;
+  }
+  return '';
+}
+
 async function generateCampaignLink() {
   orgState.eventName = document.getElementById('orgEventName').value.trim();
   orgState.description = document.getElementById('orgDescription').value.trim();
@@ -1635,28 +1653,16 @@ async function generateCampaignLink() {
     nuf: orgState.numberFont,
     numX: orgState.numberX,
     numY: orgState.numberY,
-    f: orgState.frameBase64PNG || orgState.frameBase64 || ''
+    f: buildCampaignFramePayload()
   };
 
   try {
     btn.innerHTML = `<span>⏳</span> Préparation du lien participant...`;
 
-    let localId = null;
-    let linkType = 'base64';
-
-    try {
-      localId = await CampaignStore.save(campaignData);
-    } catch (e) {
-      console.warn('Sauvegarde locale impossible, utilisation du lien universel :', e.message || e);
-    }
-
     const compactPayload = CampaignStore.encodeCompactPayload(campaignData);
     const linkHash = `#event=${encodeURIComponent(compactPayload)}`;
     const link = getParticipantPageUrl(linkHash);
-
-    if (localId) {
-      linkType = 'local';
-    }
+    const linkType = 'base64';
 
     // Afficher le lien principal
     document.getElementById('generatedLinkInput').value = link;
@@ -1671,15 +1677,6 @@ async function generateCampaignLink() {
         infoBanner.innerHTML = `<span class="link-type-badge link-type-base64">🔗 Lien universel</span> Ce lien fonctionne sur tous les appareils, même sans stockage local.`;
       }
       infoBanner.style.display = 'flex';
-    }
-
-    // Backup haute résolution dans localStorage
-    const eventId = generateEventId(orgState.eventName);
-    localStorage.setItem(`camp_highres_${eventId}`, orgState.frameBase64Original);
-
-    // Initialiser le compteur si nécessaire
-    if (localStorage.getItem(`counter_${eventId}`) === null) {
-      localStorage.setItem(`counter_${eventId}`, orgState.startNumber);
     }
 
     showToast(

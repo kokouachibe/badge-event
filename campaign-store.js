@@ -153,6 +153,77 @@ const CampaignStore = (() => {
   /* ------------------------------------------------
      ENCODE / DECODE BASE64 (lien universel)
   ------------------------------------------------ */
+  const CAMPAIGN_COMPACT_FIELDS = [
+    'n', 'd', 's', 'e', 'v', 'r', 'ce', 'wr', 'sn', 'nx', 'ny', 'nc', 'ns', 'nf', 'snb', 'npx', 'stn', 'nuc', 'nus', 'nuf', 'numX', 'numY', 'f'
+  ];
+
+  const CAMPAIGN_DEFAULTS = {
+    n: undefined,
+    d: '',
+    s: '',
+    e: '',
+    v: '',
+    r: '',
+    ce: false,
+    wr: false,
+    sn: true,
+    nx: 500,
+    ny: 850,
+    nc: '#ffffff',
+    ns: 55,
+    nf: 'Arial Bold',
+    snb: false,
+    npx: 'Participant N°',
+    stn: 1,
+    nuc: '#38bdf8',
+    nus: 45,
+    nuf: 'Arial Bold',
+    numX: 500,
+    numY: 910,
+    f: ''
+  };
+
+  function shouldIncludeCampaignField(field, value) {
+    if (value === undefined || value === null) return false;
+    if (typeof value === 'string') {
+      return value.trim() !== '';
+    }
+    if (typeof value === 'boolean') {
+      return value === true;
+    }
+    if (typeof value === 'number') {
+      const defaultValue = CAMPAIGN_DEFAULTS[field];
+      return defaultValue === undefined || value !== defaultValue;
+    }
+    return true;
+  }
+
+  function encodeCompactCampaignData(data) {
+    const compact = [];
+    CAMPAIGN_COMPACT_FIELDS.forEach((field) => {
+      const value = data?.[field];
+      if (shouldIncludeCampaignField(field, value)) {
+        compact.push(value);
+      }
+    });
+    return compact;
+  }
+
+  function decodeCompactCampaignData(compactData) {
+    const data = {};
+    let index = 0;
+    CAMPAIGN_COMPACT_FIELDS.forEach((field) => {
+      if (index < compactData.length) {
+        data[field] = compactData[index];
+        index += 1;
+      } else {
+        data[field] = CAMPAIGN_DEFAULTS[field];
+      }
+    });
+
+    return data;
+  }
+
   function encodeToBase64(data) {
     const json = JSON.stringify(data);
     const bytes = new TextEncoder().encode(json);
@@ -171,7 +242,8 @@ const CampaignStore = (() => {
   }
 
   function encodeCompactPayload(data) {
-    const json = JSON.stringify(data);
+    const compactData = encodeCompactCampaignData(data);
+    const json = JSON.stringify(compactData);
     const lz = (typeof window !== 'undefined' && window.LZString)
       || (typeof globalThis !== 'undefined' && globalThis.LZString);
 
@@ -179,7 +251,7 @@ const CampaignStore = (() => {
       return lz.compressToEncodedURIComponent(json);
     }
 
-    return encodeToBase64UrlSafe(data);
+    return encodeToBase64UrlSafe(compactData);
   }
 
   function decodeFromBase64(b64) {
@@ -208,14 +280,28 @@ const CampaignStore = (() => {
       try {
         const json = lz.decompressFromEncodedURIComponent(payload);
         if (json) {
-          return JSON.parse(json);
+          const parsed = JSON.parse(json);
+          if (Array.isArray(parsed)) {
+            return decodeCompactCampaignData(parsed);
+          }
+          if (parsed && typeof parsed === 'object') {
+            return parsed;
+          }
         }
       } catch (error) {
         // Fall back to base64 decoding below.
       }
     }
 
-    return decodeFromBase64UrlSafe(payload);
+    try {
+      const parsed = decodeFromBase64UrlSafe(payload);
+      if (Array.isArray(parsed)) {
+        return decodeCompactCampaignData(parsed);
+      }
+      return parsed;
+    } catch (error) {
+      return {};
+    }
   }
 
   /* ------------------------------------------------

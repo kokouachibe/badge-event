@@ -41,6 +41,15 @@ const pState = {
 
 let pActiveDrag = null;  // Drag & drop state for text positioning and photo panning
 
+const PARTICIPANT_FRAME_TEMPLATES = [
+  { pattern: 'royal', colors: ['#2563eb', '#38bdf8'], name: 'Bleu Royal' },
+  { pattern: 'electro', colors: ['#1d4ed8', '#06b6d4'], name: 'Nuit Électro' },
+  { pattern: 'festival', colors: ['#0ea5e9', '#818cf8'], name: 'Festival' },
+  { pattern: 'sport', colors: ['#2563eb', '#0ea5e9'], name: 'Sportif' },
+  { pattern: 'gala', colors: ['#38bdf8', '#1d4ed8'], name: 'Gala' },
+  { pattern: 'culture', colors: ['#6366f1', '#06b6d4'], name: 'Culturel' }
+];
+
 /* =============================================
    INITIALIZATION
    ============================================= */
@@ -84,49 +93,75 @@ function checkUrlParameters() {
 }
 
 async function fetchCampaignFromNpoint(id) {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    const response = await fetch(`https://api.npoint.io/${id}`, { signal: controller.signal });
-    clearTimeout(timeout);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
-    CampaignStore.save(data).catch(() => {}); // Save locally for future visits
-    bootParticipantMode(data);
-  } catch (error) {
-    console.error('npoint.io load failed, falling back to local DB if available:', error.message);
-    // Try reading IndexedDB as backup in case of network issue
-    const localData = await CampaignStore.load(id).catch(() => null);
-    if (localData) {
-      bootParticipantMode(localData);
-    } else {
-      showToast('Erreur de connexion', 'Impossible de charger la campagne depuis le service en ligne.', 'error');
-      document.getElementById('pEventName').textContent = "Campagne hors-ligne";
-      document.getElementById('pEventDescription').textContent = "Impossible de récupérer les détails de la campagne. Vérifiez votre connexion Internet.";
-    }
-  }
+  showToast('Erreur de connexion', 'Ce mode de chargement n’est plus utilisé.', 'error');
+  document.getElementById('pEventName').textContent = "Campagne introuvable";
+  document.getElementById('pEventDescription').textContent = "Le lien n’inclut pas assez d’informations pour charger la campagne.";
 }
 
 async function fetchCampaignFromLocal(id) {
-  try {
-    const data = await CampaignStore.load(id);
-    if (!data) throw new Error('Campaign not found in local store');
-    bootParticipantMode(data);
-  } catch (error) {
-    console.error('IndexedDB load failed:', error.message);
-    showToast('Campagne introuvable', 'Ce lien local ne fonctionne que sur le navigateur qui a créé la campagne.', 'error');
-    document.getElementById('pEventName').textContent = "Campagne introuvable";
-  }
+  showToast('Campagne introuvable', 'Ce lien local n’est plus supporté.', 'error');
+  document.getElementById('pEventName').textContent = "Campagne introuvable";
 }
 
 async function migrateEventToLocal(data) {
-  try {
-    const localId = await CampaignStore.save(data);
-    const newUrl = `${window.location.origin}${window.location.pathname}#lid=${localId}`;
-    window.history.replaceState({}, '', newUrl);
-  } catch (e) {
-    console.warn('Migration IndexedDB échouée (non-bloquant) :', e.message);
+  return null;
+}
+
+function resolveFrameSource(frameValue) {
+  if (typeof frameValue !== 'string' || !frameValue) return null;
+  if (frameValue.startsWith('builtin:')) {
+    return { type: 'builtin', key: frameValue.slice('builtin:'.length) };
   }
+  if (frameValue.startsWith('data:')) {
+    return { type: 'data', src: frameValue };
+  }
+  return { type: 'data', src: frameValue };
+}
+
+function buildParticipantFrameCanvas(frameKey, size = 1000) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const template = PARTICIPANT_FRAME_TEMPLATES.find(item => item.pattern === frameKey) || PARTICIPANT_FRAME_TEMPLATES[0];
+  const [c1, c2] = template.colors;
+  const cx = size / 2;
+  const cy = size / 2;
+
+  ctx.clearRect(0, 0, size, size);
+
+  const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, size / 2);
+  bg.addColorStop(0, c1);
+  bg.addColorStop(1, c2);
+  ctx.fillStyle = bg;
+  ctx.beginPath();
+  ctx.arc(cx, cy, size / 2 - 20, 0, Math.PI * 2);
+  ctx.fill();
+
+  const ring = ctx.createLinearGradient(0, 0, size, size);
+  ring.addColorStop(0, '#ffffff');
+  ring.addColorStop(0.5, c2);
+  ring.addColorStop(1, '#ffffff');
+  ctx.strokeStyle = ring;
+  ctx.lineWidth = 20;
+  ctx.beginPath();
+  ctx.arc(cx, cy, size / 2 - 35, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.arc(cx, cy, size / 2 - 70, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.font = `bold 56px Arial, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText(template.name, cx, cy + 10);
+  ctx.font = `24px Arial, sans-serif`;
+  ctx.fillText('Badge participant', cx, cy + 60);
+
+  return canvas;
 }
 
 function bootParticipantMode(data) {
@@ -151,13 +186,8 @@ function bootParticipantMode(data) {
     document.getElementById('pEventDateContainer').style.display = 'inline-flex';
   }
 
-  // Load participant counter
-  const eventId = generateEventId(data.n);
-  let counterVal = parseInt(localStorage.getItem(`counter_${eventId}`));
-  if (isNaN(counterVal)) {
-    counterVal = data.stn || 1;
-    localStorage.setItem(`counter_${eventId}`, counterVal);
-  }
+  // Load participant counter without browser persistence
+  const counterVal = data.stn || 1;
   state.currentNumber = counterVal;
   document.getElementById('pEventStatsNumber').textContent = counterVal - 1;
 
@@ -193,14 +223,21 @@ function bootParticipantMode(data) {
   if (data.ns !== undefined) state.nameSize = data.ns;
   if (data.nf !== undefined) state.nameFont = data.nf;
 
-  // Frame photo load (check high-res local backup first!)
-  const backupHighRes = localStorage.getItem(`camp_highres_${eventId}`);
+  // Frame photo load
+  const frameSource = resolveFrameSource(data.f);
   const frameImg = new Image();
   frameImg.onload = () => {
     state.frame = frameImg;
     updateParticipantPreview();
   };
-  frameImg.src = backupHighRes || data.f;
+  if (frameSource && frameSource.type === 'builtin') {
+    const canvas = buildParticipantFrameCanvas(frameSource.key, 1000);
+    frameImg.src = canvas.toDataURL('image/png');
+  } else if (frameSource && frameSource.type === 'data') {
+    frameImg.src = frameSource.src;
+  } else {
+    frameImg.src = '';
+  }
 }
 
 function formatDate(dateStr) {
@@ -555,10 +592,8 @@ function downloadParticipantBadge() {
   
   showToast('Badge officiel téléchargé ! 🎉', 'Merci pour votre participation.');
   
-  // Auto-increment participant number in local storage
+  // Keep the in-memory counter consistent without browser persistence
   const nextNum = state.currentNumber + 1;
-  localStorage.setItem(`counter_${eventId}`, nextNum);
-  
   state.currentNumber = nextNum;
   document.getElementById('pEventStatsNumber').textContent = nextNum - 1;
   updateParticipantPreview();
