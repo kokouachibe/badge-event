@@ -1,6 +1,7 @@
 /**
  * BadgeEvent – Core Application Logic
- * Handles photo upload, canvas rendering, frame selection, and download
+ * Handles photo upload, canvas rendering, frame selection, download,
+ * multiple texts, organizer settings, drag & drop, and auto-increment.
  */
 
 /* =============================================
@@ -14,9 +15,58 @@ const state = {
   posY: 0,              // Photo Y offset
   name: '',             // User name text
   showName: true,       // Whether to display name
+  nameColor: '#ffffff',
+  nameSize: 55,
+  nameFont: 'Arial Bold',
+  nameX: 500,
+  nameY: 850,
+  texts: [],            // Array of custom text blocks
   frameIndex: 0,        // Selected built-in frame index
   canvasReady: false,   // Whether canvas has been drawn
+
+  // Participant Campaign specifics
+  isParticipantMode: false,
+  campaignData: null,
+  showNumber: false,
+  numberPrefix: 'Participant N°',
+  currentNumber: 1,
+  numberX: 500,
+  numberY: 910,
+  numberSize: 45,
+  numberColor: '#38bdf8',
+  numberFont: 'Arial Bold'
 };
+
+const orgState = {
+  eventName: '',
+  description: '',
+  startDate: '',
+  endDate: '',
+  venue: '',
+  frame: null,
+  frameBase64: '',
+  frameBase64Original: '', // backup high resolution
+  redirectUrl: '',
+  collectEmail: false,
+  whatsappReminder: false,
+  showNameOnBadge: true,
+  nameX: 500,
+  nameY: 850,
+  nameSize: 55,
+  nameColor: '#ffffff',
+  nameFont: 'Arial Bold',
+  showNumberOnBadge: false,
+  numberX: 500,
+  numberY: 910,
+  numberSize: 45,
+  numberColor: '#38bdf8',
+  numberFont: 'Arial Bold',
+  numberPrefix: 'Participant N°',
+  startNumber: 1,
+  activeDrag: null
+};
+
+let activeDrag = null; // for participant canvas drag
 
 /* =============================================
    BUILT-IN FRAMES (generated as canvas-drawn frames)
@@ -69,6 +119,16 @@ document.addEventListener('DOMContentLoaded', () => {
   initFrames();
   initScrollReveal();
   animateStats();
+  
+  // Drag & drop setups
+  initCanvasDrag();
+  initOrgCanvasDrag();
+  
+  // Drag setup on participant overlay canvas
+  initParticipantOverlayCanvasDrag();
+  
+  // Check if URL has query parameters for campaign
+  checkUrlParameters();
 });
 
 /* =============================================
@@ -94,11 +154,16 @@ function scrollToGenerator() {
   document.getElementById('generator').scrollIntoView({ behavior: 'smooth' });
 }
 
+function scrollToOrganizer() {
+  document.getElementById('organizer').scrollIntoView({ behavior: 'smooth' });
+}
+
 /* =============================================
    PARTICLES
    ============================================= */
 function initParticles() {
   const container = document.getElementById('particles');
+  if (!container) return;
   const count = 40;
 
   for (let i = 0; i < count; i++) {
@@ -188,6 +253,7 @@ function initScrollReveal() {
 function initFrames() {
   const framesGrid = document.getElementById('framesGrid');
   const showcaseGrid = document.getElementById('showcaseGrid');
+  if (!framesGrid || !showcaseGrid) return;
 
   // Generate canvas-based frames
   BUILT_IN_FRAMES.forEach((frame, index) => {
@@ -358,7 +424,7 @@ function drawRoyalFrame(ctx, cx, cy, r, c1, c2, name, size) {
     drawStar(ctx, x, y, s * 0.025, s * 0.012, 5, c1);
   });
 
-  // Photo area clip (transparent circle in center)
+  // Photo area (transparent circle in center)
   const photoR = r * 0.62;
   ctx.save();
   ctx.beginPath();
@@ -591,7 +657,7 @@ function drawFestivalFrame(ctx, cx, cy, r, c1, c2, name, size) {
 
 function drawSportFrame(ctx, cx, cy, r, c1, c2, name, size) {
   const s = size;
-  drawSimpleFrame(ctx, cx, cy, r, c1, c2, name, s, '⚽ J\'Y SERAI ✓', '30 0 0 0 0 s s s 0 0');
+  drawSimpleFrame(ctx, cx, cy, r, c1, c2, name, s, '⚽ J\'Y SERAI ✓', null);
 }
 
 function drawGalaFrame(ctx, cx, cy, r, c1, c2, name, size) {
@@ -604,7 +670,7 @@ function drawCultureFrame(ctx, cx, cy, r, c1, c2, name, size) {
   drawSimpleFrame(ctx, cx, cy, r, c1, c2, name, s, '🎭 J\'Y SERAI ✓', null);
 }
 
-function drawSimpleFrame(ctx, cx, cy, r, c1, c2, name, s, label, extra) {
+function drawSimpleFrame(ctx, cx, cy, r, c1, c2, name, s, label) {
   // Background
   const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
   bg.addColorStop(0, '#020c24');
@@ -778,7 +844,7 @@ function handleFrameUpload(event) {
 }
 
 /* =============================================
-   PHOTO ADJUSTMENTS
+   PHOTO ADJUSTMENTS (Participant General)
    ============================================= */
 function updateZoom(value) {
   state.zoom = parseInt(value);
@@ -817,6 +883,9 @@ function resetPhotoAdjustments() {
 function updateBadgePreview() {
   state.name = document.getElementById('nameInput')?.value || '';
   state.showName = document.getElementById('showNameToggle')?.checked ?? true;
+  state.nameColor = document.getElementById('nameColor')?.value || '#ffffff';
+  state.nameSize = parseInt(document.getElementById('nameSize')?.value) || 55;
+  state.nameFont = document.getElementById('nameFont')?.value || 'Arial Bold';
 
   if (!state.photo && !state.frame) return;
 
@@ -831,92 +900,142 @@ function updateBadgePreview() {
 
   ctx.clearRect(0, 0, size, size);
 
-  const frame = state.frame || BUILT_IN_FRAMES[0];
-
-  // 1. Draw photo in circular area
+  // 1. Draw photo in background (NO circular clip for custom/organizer frames!)
   if (state.photo) {
-    const photoR = size * 0.31; // radius of the photo circle in frame
-    const photoCX = size / 2;
-    const photoCY = size / 2 - size * 0.02;
+    const ph = state.photo;
+    const cx = size / 2;
+    const cy = size / 2;
 
     ctx.save();
-    ctx.beginPath();
-    ctx.arc(photoCX, photoCY, photoR, 0, Math.PI * 2);
-    ctx.clip();
-
-    // Scale & position photo
+    // Default cover scale calculation
+    const scaleX = size / ph.width;
+    const scaleY = size / ph.height;
+    const baseScale = Math.max(scaleX, scaleY);
     const zoom = state.zoom / 100;
-    const ph = state.photo;
-    const minDim = Math.min(ph.width, ph.height);
-    const scale = (photoR * 2 * zoom) / minDim;
+    const scale = baseScale * zoom;
+
     const imgW = ph.width * scale;
     const imgH = ph.height * scale;
-    const imgX = photoCX - imgW / 2 + state.posX;
-    const imgY = photoCY - imgH / 2 + state.posY;
+    const imgX = cx - imgW / 2 + state.posX;
+    const imgY = cy - imgH / 2 + state.posY;
 
     ctx.drawImage(ph, imgX, imgY, imgW, imgH);
     ctx.restore();
   }
 
-  // 2. Draw frame overlay
+  // 2. Draw frame overlay on top
   if (state.frame) {
-    ctx.drawImage(state.frame, 0, 0, size, size);
+    const frame = state.frame;
+    // Adapt frame to workspace bounds preserving proportions
+    const scale = Math.min(size / frame.width, size / frame.height);
+    const w = frame.width * scale;
+    const h = frame.height * scale;
+    const x = (size - w) / 2;
+    const y = (size - h) / 2;
+    ctx.drawImage(frame, x, y, w, h);
   } else {
-    // Draw default frame
+    // Draw built-in frame
     const frameCanvas = generateFrameCanvas(BUILT_IN_FRAMES[state.frameIndex], size);
     ctx.drawImage(frameCanvas, 0, 0, size, size);
   }
 
-  // 3. Draw name text if enabled
+  // 3. Draw participant name
   if (state.showName && state.name.trim()) {
-    const nameFontSize = size * 0.055;
     ctx.save();
-
-    // Text background pill
-    ctx.font = `700 ${nameFontSize}px Outfit, sans-serif`;
+    ctx.fillStyle = state.nameColor;
+    
+    let fontStyle = '';
+    if (state.nameFont === 'Arial Bold') {
+      fontStyle = `bold ${state.nameSize}px Arial, sans-serif`;
+    } else {
+      fontStyle = `${state.nameSize}px '${state.nameFont}', sans-serif`;
+    }
+    ctx.font = fontStyle;
     ctx.textAlign = 'center';
-    const textWidth = ctx.measureText(state.name).width;
-    const pillW = textWidth + size * 0.08;
-    const pillH = nameFontSize * 1.5;
-    const pillX = size / 2 - pillW / 2;
-    const pillY = size * 0.02;
-
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    roundRect(ctx, pillX, pillY, pillW, pillH, pillH / 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#ffffff';
     ctx.textBaseline = 'middle';
-    ctx.fillText(state.name, size / 2, pillY + pillH / 2);
+    
+    // Draw text drop shadow
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 1;
+    
+    const textX = (state.nameX / 1000) * size;
+    const textY = (state.nameY / 1000) * size;
+    ctx.fillText(state.name, textX, textY);
     ctx.restore();
+  }
+
+  // 4. Draw auto-incremented participant number if visible
+  if (state.showNumber) {
+    ctx.save();
+    ctx.fillStyle = state.numberColor || '#ffffff';
+    let fontStyle = '';
+    if (state.numberFont === 'Arial Bold') {
+      fontStyle = `bold ${state.numberSize}px Arial, sans-serif`;
+    } else {
+      fontStyle = `${state.numberSize}px '${state.numberFont}', sans-serif`;
+    }
+    ctx.font = fontStyle;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 1;
+    
+    const numText = `${state.numberPrefix}${state.currentNumber}`;
+    const textX = (state.numberX / 1000) * size;
+    const textY = (state.numberY / 1000) * size;
+    ctx.fillText(numText, textX, textY);
+    ctx.restore();
+  }
+
+  // 5. Draw multiple custom text blocks
+  if (state.texts && state.texts.length > 0) {
+    state.texts.forEach(t => {
+      if (!t.text.trim()) return;
+      ctx.save();
+      ctx.fillStyle = t.color || '#ffffff';
+      
+      let fontStyle = '';
+      if (t.font === 'Arial Bold') {
+        fontStyle = `bold ${t.size}px Arial, sans-serif`;
+      } else {
+        fontStyle = `${t.size}px '${t.font}', sans-serif`;
+      }
+      ctx.font = fontStyle;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      ctx.shadowColor = 'rgba(0,0,0,0.6)';
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 1;
+      
+      const textX = (t.x / 1000) * size;
+      const textY = (t.y / 1000) * size;
+      ctx.fillText(t.text, textX, textY);
+      ctx.restore();
+    });
   }
 
   // Enable download button
   const downloadBtn = document.getElementById('downloadBtn');
-  downloadBtn.disabled = !state.photo;
+  if (downloadBtn) {
+    downloadBtn.disabled = !state.photo;
+  }
   state.canvasReady = !!state.photo;
 
   if (state.photo) {
-    document.getElementById('shareButtons').style.display = 'block';
+    const sb = document.getElementById('shareButtons');
+    if (sb) sb.style.display = 'block';
   }
 }
 
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
-
 /* =============================================
-   DOWNLOAD
+   DOWNLOAD / TELECHARGEMENT
    ============================================= */
 function downloadBadge() {
   if (!state.canvasReady) return;
@@ -926,8 +1045,8 @@ function downloadBadge() {
 
   // Generate filename
   const name = state.name ? state.name.replace(/\s+/g, '_') : 'badge';
-  const frame = BUILT_IN_FRAMES[state.frameIndex]?.name.replace(/\s+/g, '_') || 'badge';
-  link.download = `badge_${name}_${frame}.png`;
+  const frameName = BUILT_IN_FRAMES[state.frameIndex]?.name.replace(/\s+/g, '_') || 'badge';
+  link.download = `badge_${name}_${frameName}.png`;
   link.href = canvas.toDataURL('image/png', 1.0);
   link.click();
 
@@ -937,7 +1056,7 @@ function downloadBadge() {
   const btn = document.getElementById('downloadBtn');
   const originalHTML = btn.innerHTML;
   btn.innerHTML = `<span>✓</span> Téléchargé !`;
-  btn.style.background = 'linear-gradient(135deg, #10b981, #06b6d4)';
+  btn.style.background = 'linear-gradient(135deg, #2563eb, #06b6d4)';
   setTimeout(() => {
     btn.innerHTML = originalHTML;
     btn.style.background = '';
@@ -945,7 +1064,1065 @@ function downloadBadge() {
 }
 
 /* =============================================
-   SHARE FUNCTIONS
+   CUSTOM TEXTS MANAGEMENT (Générateur)
+   ============================================= */
+function addCustomText() {
+  const newText = {
+    id: Date.now(),
+    text: 'Nouveau texte',
+    color: '#ffffff',
+    size: 40,
+    font: 'Arial Bold',
+    x: 500,
+    y: 500
+  };
+  state.texts.push(newText);
+  updateCustomTextsUI();
+  updateBadgePreview();
+}
+
+function updateCustomTextsUI() {
+  const container = document.getElementById('customTextsList');
+  if (!container) return;
+  
+  container.innerHTML = '';
+  
+  state.texts.forEach((t) => {
+    const item = document.createElement('div');
+    item.className = 'custom-text-item';
+    item.innerHTML = `
+      <div class="custom-text-item-header">
+        <span class="custom-text-title">Texte personnalisé</span>
+        <button class="btn-delete-text" onclick="deleteCustomText(${t.id})">Supprimer</button>
+      </div>
+      <div class="form-group" style="margin-bottom:0;">
+        <input type="text" class="form-input" value="${t.text}" oninput="editCustomText(${t.id}, 'text', this.value)" placeholder="Contenu du texte..." />
+      </div>
+      <div class="custom-text-controls-grid">
+        <div class="form-group" style="margin-bottom:0;">
+          <span style="font-size:0.75rem; color:var(--txt-secondary);">Couleur</span>
+          <input type="color" class="form-input" value="${t.color}" onchange="editCustomText(${t.id}, 'color', this.value)" style="height:38px; padding:2px;" />
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <span style="font-size:0.75rem; color:var(--txt-secondary);">Taille (px)</span>
+          <input type="number" class="form-input" value="${t.size}" min="10" max="150" oninput="editCustomText(${t.id}, 'size', parseInt(this.value) || 30)" />
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:0;">
+        <span style="font-size:0.75rem; color:var(--txt-secondary);">Police</span>
+        <select class="form-input" onchange="editCustomText(${t.id}, 'font', this.value)">
+          <option value="Arial Bold" ${t.font === 'Arial Bold' ? 'selected' : ''}>Arial Bold</option>
+          <option value="Poppins" ${t.font === 'Poppins' ? 'selected' : ''}>Poppins</option>
+          <option value="Montserrat" ${t.font === 'Montserrat' ? 'selected' : ''}>Montserrat</option>
+          <option value="Roboto" ${t.font === 'Roboto' ? 'selected' : ''}>Roboto</option>
+          <option value="Anton" ${t.font === 'Anton' ? 'selected' : ''}>Anton</option>
+          <option value="Oswald" ${t.font === 'Oswald' ? 'selected' : ''}>Oswald</option>
+        </select>
+      </div>
+    `;
+    container.appendChild(item);
+  });
+}
+
+function editCustomText(id, field, value) {
+  const t = state.texts.find(text => text.id === id);
+  if (t) {
+    t[field] = value;
+    updateBadgePreview();
+  }
+}
+
+function deleteCustomText(id) {
+  state.texts = state.texts.filter(t => t.id !== id);
+  updateCustomTextsUI();
+  updateBadgePreview();
+}
+
+/* =============================================
+   DRAG AND DROP ON GENERATOR CANVAS
+   ============================================= */
+function getCanvasCoordinates(e, canvas) {
+  const rect = canvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  
+  const x = ((clientX - rect.left) / rect.width) * canvas.width;
+  const y = ((clientY - rect.top) / rect.height) * canvas.height;
+  return { x, y };
+}
+
+function initCanvasDrag() {
+  const canvas = document.getElementById('badgeCanvas');
+  if (!canvas) return;
+  
+  canvas.addEventListener('mousedown', startDrag);
+  canvas.addEventListener('mousemove', drag);
+  window.addEventListener('mouseup', endDrag);
+  
+  canvas.addEventListener('touchstart', startDrag, { passive: false });
+  canvas.addEventListener('touchmove', drag, { passive: false });
+  window.addEventListener('touchend', endDrag);
+  
+  function startDrag(e) {
+    if (!state.photo && !state.frame) return;
+    const coords = getCanvasCoordinates(e, canvas);
+    
+    // 1. Check if clicked near custom texts
+    for (let i = state.texts.length - 1; i >= 0; i--) {
+      const t = state.texts[i];
+      if (Math.hypot(coords.x - t.x, coords.y - t.y) < 50) {
+        e.preventDefault();
+        activeDrag = { type: 'customText', id: t.id };
+        return;
+      }
+    }
+    
+    // 2. Check if clicked near name text (if visible)
+    if (state.showName && state.name.trim()) {
+      if (Math.hypot(coords.x - state.nameX, coords.y - state.nameY) < 55) {
+        e.preventDefault();
+        activeDrag = { type: 'name' };
+        return;
+      }
+    }
+    
+    // 3. Check if clicked near number text (if visible)
+    if (state.showNumber) {
+      if (Math.hypot(coords.x - state.numberX, coords.y - state.numberY) < 50) {
+        e.preventDefault();
+        activeDrag = { type: 'number' };
+        return;
+      }
+    }
+    
+    // 4. Else, drag photo to pan
+    if (state.photo) {
+      e.preventDefault();
+      activeDrag = {
+        type: 'photo',
+        startX: coords.x,
+        startY: coords.y,
+        initialPosX: state.posX,
+        initialPosY: state.posY
+      };
+    }
+  }
+  
+  function drag(e) {
+    if (!activeDrag) return;
+    e.preventDefault();
+    const coords = getCanvasCoordinates(e, canvas);
+    
+    if (activeDrag.type === 'customText') {
+      const t = state.texts.find(text => text.id === activeDrag.id);
+      if (t) {
+        t.x = Math.max(0, Math.min(1000, Math.round(coords.x)));
+        t.y = Math.max(0, Math.min(1000, Math.round(coords.y)));
+        updateBadgePreview();
+      }
+    } else if (activeDrag.type === 'name') {
+      state.nameX = Math.max(0, Math.min(1000, Math.round(coords.x)));
+      state.nameY = Math.max(0, Math.min(1000, Math.round(coords.y)));
+      updateBadgePreview();
+    } else if (activeDrag.type === 'number') {
+      state.numberX = Math.max(0, Math.min(1000, Math.round(coords.x)));
+      state.numberY = Math.max(0, Math.min(1000, Math.round(coords.y)));
+      updateBadgePreview();
+    } else if (activeDrag.type === 'photo') {
+      const dx = coords.x - activeDrag.startX;
+      const dy = coords.y - activeDrag.startY;
+      state.posX = activeDrag.initialPosX + dx;
+      state.posY = activeDrag.initialPosY + dy;
+      
+      // Sync sliders
+      const sliderX = document.getElementById('posXSlider');
+      const sliderY = document.getElementById('posYSlider');
+      if (sliderX && sliderY) {
+        sliderX.value = state.posX;
+        sliderY.value = state.posY;
+        document.getElementById('posXValue').textContent = state.posX;
+        document.getElementById('posYValue').textContent = state.posY;
+      }
+      
+      updateBadgePreview();
+    }
+  }
+  
+  function endDrag() {
+    activeDrag = null;
+  }
+}
+
+/* =============================================
+   ORGANIZER PREVIEW & CAMPAIGN LOGIC
+   ============================================= */
+function toggleOrgNameOptions() {
+  const showName = document.getElementById('orgShowNameOnBadge').checked;
+  document.getElementById('orgNameStyleOptions').style.display = showName ? 'block' : 'none';
+}
+
+function toggleOrgNumberOptions() {
+  const showNum = document.getElementById('orgShowNumberOnBadge').checked;
+  document.getElementById('orgNumberStyleOptions').style.display = showNum ? 'block' : 'none';
+}
+
+function handleOrgDragOver(event) {
+  event.preventDefault();
+  event.currentTarget.classList.add('drag-over');
+}
+
+function handleOrgDragLeave(event) {
+  event.currentTarget.classList.remove('drag-over');
+}
+
+function handleOrgDrop(event) {
+  event.preventDefault();
+  event.currentTarget.classList.remove('drag-over');
+  const file = event.dataTransfer.files[0];
+  if (file && file.type === 'image/png') {
+    loadOrgFrameFile(file);
+  } else {
+    showToast("Erreur", "Le cadre doit être une image PNG.", "error");
+  }
+}
+
+function handleOrgFrameUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  loadOrgFrameFile(file);
+}
+
+function loadOrgFrameFile(file) {
+  if (file.type !== 'image/png') {
+    showToast("Erreur", "Le cadre doit être une image PNG avec fond transparent.", "error");
+    return;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    showToast("Erreur", "Fichier trop volumineux (Max 10 Mo).", "error");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      orgState.frame = img;
+      orgState.frameBase64Original = e.target.result;
+      
+      // Compress frame for URL portability
+      compressFrameForURL(img, (compressedBase64) => {
+        orgState.frameBase64 = compressedBase64;
+        document.getElementById('generateCampaignBtn').disabled = false;
+        
+        // Show success in upload zone
+        document.getElementById('orgUploadZone').innerHTML = `
+          <div class="upload-success">
+            <div style="font-size:2.5rem">🖼️</div>
+            <p style="font-weight:600;margin:0.5rem 0">Cadre chargé !</p>
+            <p style="font-size:0.8rem;color:var(--txt-muted)">Dimensions: ${img.width}x${img.height}px</p>
+            <button class="btn btn-ghost btn-sm" style="margin-top:0.5rem" onclick="document.getElementById('orgFrameInput').click()">
+              Changer de cadre
+            </button>
+          </div>
+        `;
+        
+        updateOrgPreview();
+      });
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function compressFrameForURL(img, callback) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  
+  // 250x250 px is small enough to generate a very small Base64 string (~10KB)
+  const size = 250;
+  canvas.width = size;
+  canvas.height = size;
+  
+  // Fit image preserving aspect ratio
+  const scale = Math.min(size / img.width, size / img.height);
+  const w = img.width * scale;
+  const h = img.height * scale;
+  const x = (size - w) / 2;
+  const y = (size - h) / 2;
+  
+  ctx.drawImage(img, x, y, w, h);
+  callback(canvas.toDataURL('image/png'));
+}
+
+function drawCheckerboard(ctx, size) {
+  const sq = 25;
+  for (let y = 0; y < size; y += sq) {
+    for (let x = 0; x < size; x += sq) {
+      ctx.fillStyle = ((x / sq) + (y / sq)) % 2 === 0 ? '#0b1329' : '#050a17';
+      ctx.fillRect(x, y, sq, sq);
+    }
+  }
+}
+
+function updateOrgPreview() {
+  orgState.eventName = document.getElementById('orgEventName').value.trim();
+  orgState.showNameOnBadge = document.getElementById('orgShowNameOnBadge').checked;
+  orgState.nameColor = document.getElementById('orgNameColor').value;
+  orgState.nameSize = parseInt(document.getElementById('orgNameSize').value) || 55;
+  orgState.nameFont = document.getElementById('orgNameFont').value;
+  
+  orgState.showNumberOnBadge = document.getElementById('orgShowNumberOnBadge').checked;
+  orgState.numberPrefix = document.getElementById('orgNumberPrefix').value;
+  orgState.startNumber = parseInt(document.getElementById('orgStartNumber').value) || 1;
+  orgState.numberColor = document.getElementById('orgNumberColor').value;
+  orgState.numberSize = parseInt(document.getElementById('orgNumberSize').value) || 45;
+  orgState.numberFont = document.getElementById('orgNumberFont').value;
+
+  const canvas = document.getElementById('orgFrameCanvas');
+  const placeholder = document.getElementById('orgCanvasPlaceholder');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const size = 1000;
+
+  if (!orgState.frame) {
+    canvas.style.display = 'none';
+    placeholder.style.display = 'block';
+    return;
+  }
+
+  canvas.style.display = 'block';
+  placeholder.style.display = 'none';
+
+  ctx.clearRect(0, 0, size, size);
+
+  // 1. Draw Checkerboard background to show transparency
+  drawCheckerboard(ctx, size);
+
+  // 2. Draw Frame preserving proportions
+  if (orgState.frame) {
+    const scale = Math.min(size / orgState.frame.width, size / orgState.frame.height);
+    const w = orgState.frame.width * scale;
+    const h = orgState.frame.height * scale;
+    const x = (size - w) / 2;
+    const y = (size - h) / 2;
+    ctx.drawImage(orgState.frame, x, y, w, h);
+  }
+
+  // 3. Draw participant name placeholder
+  if (orgState.showNameOnBadge) {
+    ctx.save();
+    ctx.fillStyle = orgState.nameColor;
+    let fontStyle = '';
+    if (orgState.nameFont === 'Arial Bold') {
+      fontStyle = `bold ${orgState.nameSize}px Arial, sans-serif`;
+    } else {
+      fontStyle = `${orgState.nameSize}px '${orgState.nameFont}', sans-serif`;
+    }
+    ctx.font = fontStyle;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,0.7)';
+    ctx.shadowBlur = 8;
+    ctx.fillText("[ Nom du Participant ]", orgState.nameX, orgState.nameY);
+    
+    // Draw visual dashed border box for drag handle
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 6]);
+    const textWidth = ctx.measureText("[ Nom du Participant ]").width;
+    ctx.strokeRect(orgState.nameX - textWidth/2 - 15, orgState.nameY - orgState.nameSize/2 - 15, textWidth + 30, orgState.nameSize + 30);
+    ctx.restore();
+  }
+
+  // 4. Draw participant number placeholder
+  if (orgState.showNumberOnBadge) {
+    ctx.save();
+    ctx.fillStyle = orgState.numberColor;
+    let fontStyle = '';
+    if (orgState.numberFont === 'Arial Bold') {
+      fontStyle = `bold ${orgState.numberSize}px Arial, sans-serif`;
+    } else {
+      fontStyle = `${orgState.numberSize}px '${orgState.numberFont}', sans-serif`;
+    }
+    ctx.font = fontStyle;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,0.7)';
+    ctx.shadowBlur = 8;
+    
+    const sampleText = `[ ${orgState.numberPrefix}${orgState.startNumber} ]`;
+    ctx.fillText(sampleText, orgState.numberX, orgState.numberY);
+    
+    // Draw visual dashed border box for drag handle
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 6]);
+    const textWidth = ctx.measureText(sampleText).width;
+    ctx.strokeRect(orgState.numberX - textWidth/2 - 15, orgState.numberY - orgState.numberSize/2 - 15, textWidth + 30, orgState.numberSize + 30);
+    ctx.restore();
+  }
+}
+
+/* =============================================
+   DRAG AND DROP ON ORGANIZER CANVAS
+   ============================================= */
+function initOrgCanvasDrag() {
+  const canvas = document.getElementById('orgFrameCanvas');
+  if (!canvas) return;
+
+  canvas.addEventListener('mousedown', startOrgDrag);
+  canvas.addEventListener('mousemove', orgDrag);
+  window.addEventListener('mouseup', endOrgDrag);
+  
+  canvas.addEventListener('touchstart', startOrgDrag, { passive: false });
+  canvas.addEventListener('touchmove', orgDrag, { passive: false });
+  window.addEventListener('touchend', endOrgDrag);
+  
+  function startOrgDrag(e) {
+    if (!orgState.frame) return;
+    const coords = getCanvasCoordinates(e, canvas);
+    
+    // Check if clicked near name placeholder
+    if (orgState.showNameOnBadge) {
+      if (Math.hypot(coords.x - orgState.nameX, coords.y - orgState.nameY) < 70) {
+        e.preventDefault();
+        orgActiveDrag = { type: 'name' };
+        return;
+      }
+    }
+    
+    // Check if clicked near number placeholder
+    if (orgState.showNumberOnBadge) {
+      if (Math.hypot(coords.x - orgState.numberX, coords.y - orgState.numberY) < 70) {
+        e.preventDefault();
+        orgActiveDrag = { type: 'number' };
+        return;
+      }
+    }
+  }
+  
+  function orgDrag(e) {
+    if (!orgActiveDrag) return;
+    e.preventDefault();
+    const coords = getCanvasCoordinates(e, canvas);
+    
+    if (orgActiveDrag.type === 'name') {
+      orgState.nameX = Math.max(0, Math.min(1000, Math.round(coords.x)));
+      orgState.nameY = Math.max(0, Math.min(1000, Math.round(coords.y)));
+      updateOrgPreview();
+    } else if (orgActiveDrag.type === 'number') {
+      orgState.numberX = Math.max(0, Math.min(1000, Math.round(coords.x)));
+      orgState.numberY = Math.max(0, Math.min(1000, Math.round(coords.y)));
+      updateOrgPreview();
+    }
+  }
+  
+  function endOrgDrag() {
+    orgActiveDrag = null;
+  }
+}
+
+/* =============================================
+   CAMPAIGN LINK GENERATOR
+   ============================================= */
+function generateCampaignLink() {
+  orgState.eventName = document.getElementById('orgEventName').value.trim();
+  orgState.description = document.getElementById('orgDescription').value.trim();
+  orgState.startDate = document.getElementById('orgStartDate').value;
+  orgState.endDate = document.getElementById('orgEndDate').value;
+  orgState.venue = document.getElementById('orgVenue').value.trim();
+  orgState.redirectUrl = document.getElementById('orgRedirectUrl').value.trim();
+  orgState.collectEmail = document.getElementById('orgCollectEmail').checked;
+  orgState.whatsappReminder = document.getElementById('orgWhatsappReminder').checked;
+  orgState.showNameOnBadge = document.getElementById('orgShowNameOnBadge').checked;
+  
+  orgState.showNumberOnBadge = document.getElementById('orgShowNumberOnBadge').checked;
+  orgState.numberPrefix = document.getElementById('orgNumberPrefix').value;
+  orgState.startNumber = parseInt(document.getElementById('orgStartNumber').value) || 1;
+
+  if (!orgState.eventName) {
+    showToast("Erreur", "Le nom de l'événement est requis.", "error");
+    return;
+  }
+  if (!orgState.frameBase64) {
+    showToast("Erreur", "Veuillez charger un cadre de badge.", "error");
+    return;
+  }
+
+  const campaignData = {
+    n: orgState.eventName,
+    d: orgState.description,
+    s: orgState.startDate,
+    e: orgState.endDate,
+    v: orgState.venue,
+    r: orgState.redirectUrl,
+    ce: orgState.collectEmail,
+    wr: orgState.whatsappReminder,
+    sn: orgState.showNameOnBadge,
+    nx: orgState.nameX,
+    ny: orgState.nameY,
+    nc: orgState.nameColor,
+    ns: orgState.nameSize,
+    nf: orgState.nameFont,
+    snb: orgState.showNumberOnBadge,
+    npx: orgState.numberPrefix,
+    stn: orgState.startNumber,
+    nuc: orgState.numberColor,
+    nus: orgState.numberSize,
+    nuf: orgState.numberFont,
+    f: orgState.frameBase64 // compressed low-res base64 image
+  };
+
+  try {
+    const jsonStr = JSON.stringify(campaignData);
+    // Base64 encoding supporting unicode
+    const b64 = btoa(unescape(encodeURIComponent(jsonStr)));
+    const link = `${window.location.origin}${window.location.pathname}?event=${b64}`;
+    
+    document.getElementById('generatedLinkInput').value = link;
+    document.getElementById('campaignLinkResult').style.display = 'block';
+    
+    // Backup high-res in localStorage for local testing
+    const eventId = generateEventId(orgState.eventName);
+    localStorage.setItem(`camp_highres_${eventId}`, orgState.frameBase64Original);
+    
+    // Initialize participant counter in localStorage
+    if (localStorage.getItem(`counter_${eventId}`) === null) {
+      localStorage.setItem(`counter_${eventId}`, orgState.startNumber);
+    }
+    
+    showToast("Campagne créée ! 🚀", "Le lien participant est disponible.");
+  } catch (error) {
+    console.error("Génération de campagne ratée:", error);
+    showToast("Erreur", "Impossible de générer le lien de campagne.", "error");
+  }
+}
+
+function copyCampaignLink() {
+  const input = document.getElementById('generatedLinkInput');
+  input.select();
+  document.execCommand('copy');
+  showToast("Copié !", "Lien copié dans le presse-papiers.");
+}
+
+function testParticipantLink() {
+  const link = document.getElementById('generatedLinkInput').value;
+  if (link) {
+    window.open(link, '_blank');
+  }
+}
+
+function generateEventId(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 30);
+}
+
+/* =============================================
+   PARTICIPANT OVERLAY CAMPAIGN RUNTIME
+   ============================================= */
+const pState = {
+  photo: null,
+  zoom: 100,
+  posX: 0,
+  posY: 0,
+  name: '',
+  email: '',
+  canvasReady: false
+};
+
+let pActiveDrag = null;
+
+function checkUrlParameters() {
+  const params = new URLSearchParams(window.location.search);
+  const eventB64 = params.get('event');
+  
+  if (eventB64) {
+    try {
+      const decodedJson = decodeURIComponent(escape(atob(eventB64)));
+      const data = JSON.parse(decodedJson);
+      bootParticipantMode(data);
+    } catch (e) {
+      console.error("URL decoding failed:", e);
+      showToast("Lien invalide", "Les paramètres de l'événement sont corrompus.", "error");
+    }
+  }
+}
+
+function bootParticipantMode(data) {
+  state.isParticipantMode = true;
+  state.campaignData = data;
+
+  // Set event banner details
+  document.getElementById('pEventName').textContent = data.n;
+  document.getElementById('pEventDescription').textContent = data.d || "Bienvenue sur la campagne de badge officielle !";
+  
+  // Venue
+  if (data.v) {
+    document.getElementById('pEventVenue').textContent = data.v;
+    document.getElementById('pEventVenueContainer').style.display = 'inline-flex';
+  } else {
+    document.getElementById('pEventVenueContainer').style.display = 'none';
+  }
+
+  // Date formatted
+  if (data.s) {
+    let dateStr = formatDate(data.s);
+    if (data.e) dateStr += ` - ${formatDate(data.e)}`;
+    document.getElementById('pEventDate').textContent = dateStr;
+    document.getElementById('pEventDateContainer').style.display = 'inline-flex';
+  } else {
+    document.getElementById('pEventDateContainer').style.display = 'none';
+  }
+
+  // Load participant counter from localStorage
+  const eventId = generateEventId(data.n);
+  let counterVal = parseInt(localStorage.getItem(`counter_${eventId}`));
+  if (isNaN(counterVal)) {
+    counterVal = data.stn || 1;
+    localStorage.setItem(`counter_${eventId}`, counterVal);
+  }
+  state.currentNumber = counterVal;
+  document.getElementById('pEventStatsNumber').textContent = counterVal - 1;
+
+  // Show/hide Name controls
+  const nameCard = document.getElementById('pStepNameContainer');
+  if (data.sn) {
+    nameCard.style.display = 'block';
+  } else {
+    nameCard.style.display = 'none';
+  }
+
+  // Show/hide Email card
+  const emailCard = document.getElementById('pStepEmailContainer');
+  if (data.ce) {
+    emailCard.style.display = 'block';
+    // Shift badges step indices
+    document.getElementById('pEmailBadgeNum').textContent = data.sn ? '3' : '2';
+  } else {
+    emailCard.style.display = 'none';
+  }
+
+  // Setup frame
+  state.showNumber = data.snb;
+  state.numberPrefix = data.npx || 'Participant N°';
+  state.numberX = data.nx2 || data.numberX || 500; // fallback if missing
+  state.numberY = data.ny2 || data.numberY || 910;
+  state.numberColor = data.nuc || '#ffffff';
+  state.numberSize = data.nus || 45;
+  state.numberFont = data.nuf || 'Arial Bold';
+  
+  // Check if position was saved in orgX coords
+  state.numberX = data.numberX !== undefined ? data.numberX : 500;
+  state.numberY = data.numberY !== undefined ? data.numberY : 910;
+  
+  if (data.nx !== undefined) state.nameX = data.nx;
+  if (data.ny !== undefined) state.nameY = data.ny;
+  if (data.nc !== undefined) state.nameColor = data.nc;
+  if (data.ns !== undefined) state.nameSize = data.ns;
+  if (data.nf !== undefined) state.nameFont = data.nf;
+
+  // Frame photo load (Check high-res local backup first!)
+  const backupHighRes = localStorage.getItem(`camp_highres_${eventId}`);
+  const frameImg = new Image();
+  frameImg.onload = () => {
+    state.frame = frameImg;
+    // Open Participant overlay
+    document.getElementById('participantOverlay').style.display = 'flex';
+    document.body.style.overflow = 'hidden'; // block page scroll
+    updateParticipantPreview();
+  };
+  frameImg.src = backupHighRes || data.f;
+}
+
+function closeParticipantOverlay() {
+  document.getElementById('participantOverlay').style.display = 'none';
+  document.body.style.overflow = '';
+  // Remove campaign parameters from URL to avoid reload loop
+  window.history.replaceState({}, document.title, window.location.pathname);
+  state.isParticipantMode = false;
+}
+
+function formatDate(dateStr) {
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return dateStr;
+}
+
+/* =============================================
+   PARTICIPANT PREVIEW & ADJUSTMENTS
+   ============================================= */
+function handlePPhotoUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  loadPPhotoFile(file);
+}
+
+function handlePDragOver(event) {
+  event.preventDefault();
+  event.currentTarget.classList.add('drag-over');
+}
+
+function handlePDragLeave(event) {
+  event.currentTarget.classList.remove('drag-over');
+}
+
+function handlePDrop(event) {
+  event.preventDefault();
+  event.currentTarget.classList.remove('drag-over');
+  const file = event.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) {
+    loadPPhotoFile(file);
+  }
+}
+
+function loadPPhotoFile(file) {
+  if (file.size > 10 * 1024 * 1024) {
+    showToast('Fichier trop volumineux', 'La taille maximale est de 10 Mo.', 'error');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      pState.photo = img;
+      document.getElementById('pPhotoControls').style.display = 'flex';
+      document.getElementById('pUploadZone').innerHTML = `
+        <div class="upload-success">
+          <div style="font-size:2.5rem">📸</div>
+          <p style="font-weight:600;margin:0.5rem 0">Photo chargée !</p>
+          <p style="font-size:0.8rem;color:var(--txt-muted)">${file.name}</p>
+          <button class="btn btn-ghost btn-sm" style="margin-top:0.5rem" onclick="document.getElementById('pPhotoInput').click()">
+            Changer de photo
+          </button>
+        </div>
+      `;
+      updateParticipantPreview();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function updatePZoom(value) {
+  pState.zoom = parseInt(value);
+  document.getElementById('pZoomValue').textContent = `${value}%`;
+  updateParticipantPreview();
+}
+
+function updatePPosX(value) {
+  pState.posX = parseInt(value);
+  document.getElementById('pPosXValue').textContent = value;
+  updateParticipantPreview();
+}
+
+function updatePPosY(value) {
+  pState.posY = parseInt(value);
+  document.getElementById('pPosYValue').textContent = value;
+  updateParticipantPreview();
+}
+
+function resetPPhotoAdjustments() {
+  pState.zoom = 100;
+  pState.posX = 0;
+  pState.posY = 0;
+  document.getElementById('pZoomSlider').value = 100;
+  document.getElementById('pPosXSlider').value = 0;
+  document.getElementById('pPosYSlider').value = 0;
+  document.getElementById('pZoomValue').textContent = '100%';
+  document.getElementById('pPosXValue').textContent = '0';
+  document.getElementById('pPosYValue').textContent = '0';
+  updateParticipantPreview();
+}
+
+function validateParticipantForm() {
+  const data = state.campaignData;
+  if (!data) return false;
+  
+  let valid = true;
+
+  if (data.ce) {
+    const email = document.getElementById('pEmailInput').value.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    valid = emailRegex.test(email);
+  }
+
+  // Active or disable download button
+  const btn = document.getElementById('pDownloadBtn');
+  btn.disabled = !(pState.photo && valid);
+  return valid;
+}
+
+function updateParticipantPreview() {
+  pState.name = document.getElementById('pNameInput')?.value || '';
+  
+  if (!pState.photo && !state.frame) return;
+
+  const canvas = document.getElementById('participantCanvas');
+  const placeholder = document.getElementById('pCanvasPlaceholder');
+  const ctx = canvas.getContext('2d');
+  const size = 1000;
+
+  canvas.style.display = 'block';
+  placeholder.style.display = 'none';
+
+  ctx.clearRect(0, 0, size, size);
+
+  // 1. Draw photo in background
+  if (pState.photo) {
+    const ph = pState.photo;
+    const cx = size / 2;
+    const cy = size / 2;
+
+    ctx.save();
+    const scaleX = size / ph.width;
+    const scaleY = size / ph.height;
+    const baseScale = Math.max(scaleX, scaleY);
+    const zoom = pState.zoom / 100;
+    const scale = baseScale * zoom;
+
+    const imgW = ph.width * scale;
+    const imgH = ph.height * scale;
+    const imgX = cx - imgW / 2 + pState.posX;
+    const imgY = cy - imgH / 2 + pState.posY;
+
+    ctx.drawImage(ph, imgX, imgY, imgW, imgH);
+    ctx.restore();
+  }
+
+  // 2. Draw campaign custom frame on top (resizing with ratio preservation)
+  if (state.frame) {
+    const frame = state.frame;
+    const scale = Math.min(size / frame.width, size / frame.height);
+    const w = frame.width * scale;
+    const h = frame.height * scale;
+    const x = (size - w) / 2;
+    const y = (size - h) / 2;
+    ctx.drawImage(frame, x, y, w, h);
+  }
+
+  // 3. Draw participant name
+  const data = state.campaignData;
+  if (data && data.sn && pState.name.trim()) {
+    ctx.save();
+    ctx.fillStyle = data.nc || '#ffffff';
+    let fontStyle = '';
+    if (data.nf === 'Arial Bold') {
+      fontStyle = `bold ${data.ns || 55}px Arial, sans-serif`;
+    } else {
+      fontStyle = `${data.ns || 55}px '${data.nf || 'Outfit'}', sans-serif`;
+    }
+    ctx.font = fontStyle;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 1;
+    
+    // Position coordinates
+    const textX = (state.nameX / 1000) * size;
+    const textY = (state.nameY / 1000) * size;
+    
+    ctx.fillText(pState.name, textX, textY);
+    ctx.restore();
+  }
+
+  // 4. Draw participant number
+  if (data && data.snb) {
+    ctx.save();
+    ctx.fillStyle = state.numberColor || '#ffffff';
+    let fontStyle = '';
+    if (state.numberFont === 'Arial Bold') {
+      fontStyle = `bold ${state.numberSize}px Arial, sans-serif`;
+    } else {
+      fontStyle = `${state.numberSize}px '${state.numberFont}', sans-serif`;
+    }
+    ctx.font = fontStyle;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 1;
+    
+    const numText = `${state.numberPrefix}${state.currentNumber}`;
+    const textX = (state.numberX / 1000) * size;
+    const textY = (state.numberY / 1000) * size;
+    ctx.fillText(numText, textX, textY);
+    ctx.restore();
+  }
+
+  validateParticipantForm();
+  
+  if (pState.photo) {
+    document.getElementById('pShareButtons').style.display = 'block';
+  }
+}
+
+/* =============================================
+   DRAG AND DROP ON PARTICIPANT OVERLAY CANVAS
+   ============================================= */
+function initParticipantOverlayCanvasDrag() {
+  const canvas = document.getElementById('participantCanvas');
+  if (!canvas) return;
+
+  canvas.addEventListener('mousedown', startDrag);
+  canvas.addEventListener('mousemove', drag);
+  window.addEventListener('mouseup', endDrag);
+  
+  canvas.addEventListener('touchstart', startDrag, { passive: false });
+  canvas.addEventListener('touchmove', drag, { passive: false });
+  window.addEventListener('touchend', endDrag);
+  
+  function startDrag(e) {
+    if (!pState.photo) return;
+    const coords = getCanvasCoordinates(e, canvas);
+    const data = state.campaignData;
+    
+    // Check if clicked near name text
+    if (data && data.sn && pState.name.trim()) {
+      if (Math.hypot(coords.x - state.nameX, coords.y - state.nameY) < 55) {
+        e.preventDefault();
+        pActiveDrag = { type: 'name' };
+        return;
+      }
+    }
+    
+    // Check if clicked near number text
+    if (data && data.snb) {
+      if (Math.hypot(coords.x - state.numberX, coords.y - state.numberY) < 55) {
+        e.preventDefault();
+        pActiveDrag = { type: 'number' };
+        return;
+      }
+    }
+    
+    // Else, pan photo
+    e.preventDefault();
+    pActiveDrag = {
+      type: 'photo',
+      startX: coords.x,
+      startY: coords.y,
+      initialPosX: pState.posX,
+      initialPosY: pState.posY
+    };
+  }
+  
+  function drag(e) {
+    if (!pActiveDrag) return;
+    e.preventDefault();
+    const coords = getCanvasCoordinates(e, canvas);
+    
+    if (pActiveDrag.type === 'name') {
+      state.nameX = Math.max(0, Math.min(1000, Math.round(coords.x)));
+      state.nameY = Math.max(0, Math.min(1000, Math.round(coords.y)));
+      updateParticipantPreview();
+    } else if (pActiveDrag.type === 'number') {
+      state.numberX = Math.max(0, Math.min(1000, Math.round(coords.x)));
+      state.numberY = Math.max(0, Math.min(1000, Math.round(coords.y)));
+      updateParticipantPreview();
+    } else if (pActiveDrag.type === 'photo') {
+      const dx = coords.x - pActiveDrag.startX;
+      const dy = coords.y - pActiveDrag.startY;
+      pState.posX = pActiveDrag.initialPosX + dx;
+      pState.posY = pActiveDrag.initialPosY + dy;
+      
+      // Sync sliders
+      const sliderX = document.getElementById('pPosXSlider');
+      const sliderY = document.getElementById('pPosYSlider');
+      if (sliderX && sliderY) {
+        sliderX.value = pState.posX;
+        sliderY.value = pState.posY;
+        document.getElementById('pPosXValue').textContent = pState.posX;
+        document.getElementById('pPosYValue').textContent = pState.posY;
+      }
+      
+      updateParticipantPreview();
+    }
+  }
+  
+  function endDrag() {
+    pActiveDrag = null;
+  }
+}
+
+/* =============================================
+   DOWNLOAD / TELECHARGEMENT (Participant Overlay)
+   ============================================= */
+function downloadParticipantBadge() {
+  const data = state.campaignData;
+  if (!data || !pState.photo) return;
+  
+  const canvas = document.getElementById('participantCanvas');
+  const link = document.createElement('a');
+  
+  const formattedName = pState.name ? pState.name.replace(/\s+/g, '_') : 'badge';
+  const eventId = generateEventId(data.n);
+  
+  link.download = `badge_${data.n.replace(/\s+/g, '_')}_${formattedName}.png`;
+  link.href = canvas.toDataURL('image/png', 1.0);
+  link.click();
+  
+  showToast('Badge officiel téléchargé ! 🎉', 'Merci pour votre participation.');
+  
+  // 1. Auto-increment participant number in localStorage
+  const nextNum = state.currentNumber + 1;
+  localStorage.setItem(`counter_${eventId}`, nextNum);
+  
+  // Update state and UI for next load or live refresh
+  state.currentNumber = nextNum;
+  document.getElementById('pEventStatsNumber').textContent = nextNum - 1;
+  updateParticipantPreview();
+
+  // 2. Animate button
+  const btn = document.getElementById('pDownloadBtn');
+  const originalHTML = btn.innerHTML;
+  btn.innerHTML = `<span>✓</span> Badge Téléchargé !`;
+  btn.style.background = 'linear-gradient(135deg, #10b981, #06b6d4)';
+  setTimeout(() => {
+    btn.innerHTML = originalHTML;
+    btn.style.background = '';
+  }, 2500);
+
+  // 3. Redirect if URL redirection is configured
+  if (data.r) {
+    showToast("Redirection...", "Vous allez être redirigé dans un instant.");
+    setTimeout(() => {
+      window.location.href = data.r;
+    }, 2000);
+  }
+}
+
+/* =============================================
+   SHARE FUNCTIONS (Participant Campaign Overlay)
+   ============================================= */
+function shareParticipantWhatsApp() {
+  const text = encodeURIComponent(`Je participe à ${state.campaignData?.n || "l'événement"} ! Créez votre badge officiel ici 🎭 : ${window.location.href}`);
+  window.open(`https://wa.me/?text=${text}`, '_blank');
+}
+
+function shareParticipantFacebook() {
+  const url = encodeURIComponent(window.location.href);
+  window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank');
+}
+
+function shareParticipantTwitter() {
+  const text = encodeURIComponent(`Je participe à ${state.campaignData?.n || "l'événement"} ! Créez votre badge officiel 🎭 #JYSerai : ${window.location.href}`);
+  window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank');
+}
+
+function togglePPreviewSize() {
+  const container = document.getElementById('pCanvasContainer');
+  const isLarge = container.style.maxWidth === '700px';
+  container.style.maxWidth = isLarge ? '' : '700px';
+}
+
+/* =============================================
+   SHARE FUNCTIONS (Participant General)
    ============================================= */
 function shareWhatsApp() {
   const text = encodeURIComponent("Je participe à l'événement ! Créez votre badge sur BadgeEvent 🎭");
@@ -963,7 +2140,7 @@ function shareTwitter() {
 }
 
 /* =============================================
-   PREVIEW SIZE TOGGLE
+   PREVIEW SIZE TOGGLE (Participant General)
    ============================================= */
 let previewLarge = false;
 function togglePreviewSize() {
@@ -1007,8 +2184,8 @@ function showToast(title, message, type = 'success') {
     toast.style.background = 'rgba(239, 68, 68, 0.15)';
     toast.style.borderColor = 'rgba(239, 68, 68, 0.4)';
   } else {
-    toast.style.background = 'rgba(16, 185, 129, 0.15)';
-    toast.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+    toast.style.background = 'rgba(37, 99, 235, 0.15)';
+    toast.style.borderColor = 'rgba(56, 189, 248, 0.45)';
   }
 
   toast.classList.add('show');
@@ -1026,7 +2203,6 @@ window.addEventListener('load', () => {
     const img = new Image();
     img.onload = () => {
       state.frame = img;
-      // Show placeholder still - only update when user uploads photo
     };
     img.src = fc.toDataURL('image/png');
   }, 300);
