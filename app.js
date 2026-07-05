@@ -129,6 +129,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Drag setup on participant overlay canvas
   initParticipantOverlayCanvasDrag();
   
+  const generateBtn = document.getElementById('generateCampaignBtn');
+  if (generateBtn) {
+    generateBtn.disabled = false;
+  }
+  
   // Check if URL has query parameters for campaign
   checkUrlParameters();
 });
@@ -322,6 +327,8 @@ function selectFrame(index, dataURL, clickedEl) {
   const frame = BUILT_IN_FRAMES[index];
   orgState.frameMode = 'built-in';
   orgState.frameKey = frame.pattern;
+  orgState.frameBase64 = '';
+  document.getElementById('generateCampaignBtn').disabled = false;
   const frameCanvas = generateFrameCanvas(frame, 1000);
   const img = new Image();
   img.src = frameCanvas.toDataURL('image/png');
@@ -336,6 +343,8 @@ function selectFrameFromShowcase(index, dataURL) {
   const frame = BUILT_IN_FRAMES[index];
   orgState.frameMode = 'built-in';
   orgState.frameKey = frame.pattern;
+  orgState.frameBase64 = '';
+  document.getElementById('generateCampaignBtn').disabled = false;
   const frameCanvas = generateFrameCanvas(frame, 1000);
   const img = new Image();
   img.src = frameCanvas.toDataURL('image/png');
@@ -1620,7 +1629,12 @@ async function generateCampaignLink() {
     showToast("Erreur", "Le nom de l'événement est requis.", "error");
     return;
   }
-  if (!orgState.frameBase64) {
+  if (orgState.frameMode === 'built-in') {
+    if (!orgState.frameKey) {
+      showToast("Erreur", "Veuillez sélectionner un cadre de badge.", "error");
+      return;
+    }
+  } else if (!orgState.frameBase64) {
     showToast("Erreur", "Veuillez charger un cadre de badge.", "error");
     return;
   }
