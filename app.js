@@ -1573,6 +1573,8 @@ function generateCampaignLink() {
     nuc: orgState.numberColor,
     nus: orgState.numberSize,
     nuf: orgState.numberFont,
+    numX: orgState.numberX,   // position X du numéro
+    numY: orgState.numberY,   // position Y du numéro
     f: orgState.frameBase64 // compressed low-res base64 image
   };
 
@@ -1704,19 +1706,16 @@ function bootParticipantMode(data) {
     emailCard.style.display = 'none';
   }
 
-  // Setup frame
+  // Setup number on badge
   state.showNumber = data.snb;
   state.numberPrefix = data.npx || 'Participant N°';
-  state.numberX = data.nx2 || data.numberX || 500; // fallback if missing
-  state.numberY = data.ny2 || data.numberY || 910;
-  state.numberColor = data.nuc || '#ffffff';
+  state.numberX = data.numX !== undefined ? data.numX : 500;
+  state.numberY = data.numY !== undefined ? data.numY : 910;
+  state.numberColor = data.nuc || '#38bdf8';
   state.numberSize = data.nus || 45;
   state.numberFont = data.nuf || 'Arial Bold';
-  
-  // Check if position was saved in orgX coords
-  state.numberX = data.numberX !== undefined ? data.numberX : 500;
-  state.numberY = data.numberY !== undefined ? data.numberY : 910;
-  
+
+  // Setup name on badge
   if (data.nx !== undefined) state.nameX = data.nx;
   if (data.ny !== undefined) state.nameY = data.ny;
   if (data.nc !== undefined) state.nameColor = data.nc;
