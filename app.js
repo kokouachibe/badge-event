@@ -1650,8 +1650,8 @@ async function generateCampaignLink() {
       console.warn('Sauvegarde locale impossible, utilisation du lien universel :', e.message || e);
     }
 
-    const b64 = CampaignStore.encodeToBase64UrlSafe(campaignData);
-    const linkHash = `#event=${encodeURIComponent(b64)}`;
+    const compactPayload = CampaignStore.encodeCompactPayload(campaignData);
+    const linkHash = `#event=${encodeURIComponent(compactPayload)}`;
     const link = getParticipantPageUrl(linkHash);
 
     if (localId) {

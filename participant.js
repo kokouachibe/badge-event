@@ -61,7 +61,7 @@ function checkUrlParameters() {
     if (!eventB64) return;
     try {
       const decoded = decodeURIComponent(eventB64);
-      const data = CampaignStore.decodeFromBase64UrlSafe(decoded);
+      const data = CampaignStore.decodeCompactPayload(decoded);
       migrateEventToLocal(data);
       bootParticipantMode(data);
     } catch (e) {

@@ -170,6 +170,18 @@ const CampaignStore = (() => {
       .replace(/=+$/g, '');
   }
 
+  function encodeCompactPayload(data) {
+    const json = JSON.stringify(data);
+    const lz = (typeof window !== 'undefined' && window.LZString)
+      || (typeof globalThis !== 'undefined' && globalThis.LZString);
+
+    if (lz && typeof lz.compressToEncodedURIComponent === 'function') {
+      return lz.compressToEncodedURIComponent(json);
+    }
+
+    return encodeToBase64UrlSafe(data);
+  }
+
   function decodeFromBase64(b64) {
     const binary = atob(b64);
     const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
@@ -188,8 +200,26 @@ const CampaignStore = (() => {
     return decodeFromBase64(normalized);
   }
 
+  function decodeCompactPayload(payload) {
+    const lz = (typeof window !== 'undefined' && window.LZString)
+      || (typeof globalThis !== 'undefined' && globalThis.LZString);
+
+    if (lz && typeof lz.decompressFromEncodedURIComponent === 'function') {
+      try {
+        const json = lz.decompressFromEncodedURIComponent(payload);
+        if (json) {
+          return JSON.parse(json);
+        }
+      } catch (error) {
+        // Fall back to base64 decoding below.
+      }
+    }
+
+    return decodeFromBase64UrlSafe(payload);
+  }
+
   /* ------------------------------------------------
      PUBLIC API
   ------------------------------------------------ */
-  return { save, load, list, remove, generateShortId, encodeToBase64, encodeToBase64UrlSafe, decodeFromBase64, decodeFromBase64UrlSafe, openDB };
+  return { save, load, list, remove, generateShortId, encodeToBase64, encodeToBase64UrlSafe, encodeCompactPayload, decodeFromBase64, decodeFromBase64UrlSafe, decodeCompactPayload, openDB };
 })();
