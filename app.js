@@ -1635,52 +1635,24 @@ async function generateCampaignLink() {
     nuf: orgState.numberFont,
     numX: orgState.numberX,
     numY: orgState.numberY,
-    f: orgState.frameBase64
+    f: orgState.frameBase64PNG || orgState.frameBase64 || ''
   };
 
   try {
-    // ── Niveau 1 : npoint.io (lien universel court) ──────────────────
-    let shortId = null;
-    let linkType = 'local'; // 'npoint' | 'local' | 'base64'
+    btn.innerHTML = `<span>⏳</span> Préparation du lien participant...`;
+
+    let localId = null;
+    let linkType = 'local';
 
     try {
-      btn.innerHTML = `<span>⏳</span> Connexion au service en ligne...`;
-      // Utiliser le PNG transparent pour le stockage en ligne
-      // (JPEG = pas de transparence → cadre illisible sur les autres appareils)
-      const onlineData = { ...campaignData, f: orgState.frameBase64PNG || campaignData.f };
-      const response = await fetch('https://api.npoint.io', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(onlineData),
-        signal: AbortSignal.timeout(6000)
-      });
-      if (response.ok) {
-        const res = await response.json();
-        shortId = res.id;
-        linkType = 'npoint';
-      }
+      localId = await CampaignStore.save(campaignData);
+      linkType = 'local';
     } catch (e) {
-      console.warn('npoint.io indisponible, repli sur IndexedDB local :', e.message);
+      console.warn('Sauvegarde locale impossible, repli base64 :', e.message || e);
     }
 
-    // ── Niveau 2 : IndexedDB local (lien court, même navigateur) ─────
-    let localId = null;
-    if (!shortId) {
-      try {
-        btn.innerHTML = `<span>⏳</span> Sauvegarde locale en cours...`;
-        localId = await CampaignStore.save(campaignData);
-        linkType = 'local';
-      } catch (e) {
-        console.warn('IndexedDB indisponible, repli base64 :', e.message);
-      }
-    }
-
-    // ── Niveau 3 : base64 URL (dernier recours) ──────────────────────
     let link;
-
-    if (shortId) {
-      link = getParticipantPageUrl(`#id=${shortId}`);
-    } else if (localId) {
+    if (localId) {
       link = getParticipantPageUrl(`#lid=${localId}`);
     } else {
       const b64 = CampaignStore.encodeToBase64(campaignData);
@@ -1695,12 +1667,10 @@ async function generateCampaignLink() {
     // Afficher la bannière d'info selon le type
     const infoBanner = document.getElementById('linkTypeBanner');
     if (infoBanner) {
-      if (linkType === 'npoint') {
-        infoBanner.innerHTML = `<span class="link-type-badge link-type-online">✅ Lien court généré</span> Partagez ce lien avec vos participants.`;
-      } else if (linkType === 'local') {
-        infoBanner.innerHTML = `<span class="link-type-badge link-type-local">⚠️ Lien de secours local</span> Ce lien ne fonctionne que sur <strong>ce navigateur</strong> car le service en ligne est inaccessible.`;
+      if (linkType === 'local') {
+        infoBanner.innerHTML = `<span class="link-type-badge link-type-local">✅ Lien participant généré</span> Le lien est prêt à être partagé avec vos participants.`;
       } else {
-        infoBanner.innerHTML = `<span class="link-type-badge link-type-base64">🔗 Lien de secours (Données encodées)</span> Service en ligne indisponible. Ce lien est long mais fonctionne sur tous les appareils.`;
+        infoBanner.innerHTML = `<span class="link-type-badge link-type-base64">🔗 Lien de secours (Données encodées)</span> Ce lien fonctionne sur tous les appareils, même sans stockage local.`;
       }
       infoBanner.style.display = 'flex';
     }
@@ -1716,7 +1686,7 @@ async function generateCampaignLink() {
 
     showToast(
       "Campagne créée ! 🚀",
-      linkType === 'npoint' ? "Lien court professionnel disponible." : "Lien de secours généré."
+      linkType === 'local' ? "Lien participant prêt à partager." : "Lien de secours généré."
     );
 
   } catch (error) {

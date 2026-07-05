@@ -15,6 +15,7 @@ const CampaignStore = (() => {
   const DB_NAME    = 'BadgeEventDB';
   const DB_VERSION = 1;
   const STORE_NAME = 'campaigns';
+  const STORAGE_PREFIX = 'badgeevent_campaign_';
 
   let _db = null;
 
@@ -56,57 +57,97 @@ const CampaignStore = (() => {
      SAVE   → returns shortId
   ------------------------------------------------ */
   async function save(data) {
-    const db    = await openDB();
-    const id    = generateShortId();
+    const id = generateShortId();
     const entry = { id, data, name: data.n || 'Campagne', createdAt: Date.now() };
 
-    return new Promise((resolve, reject) => {
-      const tx  = db.transaction(STORE_NAME, 'readwrite');
-      const req = tx.objectStore(STORE_NAME).put(entry);
-      req.onsuccess = () => resolve(id);
-      req.onerror   = (e) => reject(e.target.error);
-    });
+    try {
+      const db = await openDB();
+      return await new Promise((resolve, reject) => {
+        const tx  = db.transaction(STORE_NAME, 'readwrite');
+        const req = tx.objectStore(STORE_NAME).put(entry);
+        req.onsuccess = () => resolve(id);
+        req.onerror   = (e) => reject(e.target.error);
+      });
+    } catch (error) {
+      try {
+        localStorage.setItem(`${STORAGE_PREFIX}${id}`, JSON.stringify(entry));
+        return id;
+      } catch (storageError) {
+        throw storageError || error;
+      }
+    }
   }
 
   /* ------------------------------------------------
      LOAD   → returns data object or null
   ------------------------------------------------ */
   async function load(id) {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const tx  = db.transaction(STORE_NAME, 'readonly');
-      const req = tx.objectStore(STORE_NAME).get(id);
-      req.onsuccess = (e) => resolve(e.target.result ? e.target.result.data : null);
-      req.onerror   = (e) => reject(e.target.error);
-    });
+    try {
+      const db = await openDB();
+      return await new Promise((resolve, reject) => {
+        const tx  = db.transaction(STORE_NAME, 'readonly');
+        const req = tx.objectStore(STORE_NAME).get(id);
+        req.onsuccess = (e) => resolve(e.target.result ? e.target.result.data : null);
+        req.onerror   = (e) => reject(e.target.error);
+      });
+    } catch (error) {
+      try {
+        const raw = localStorage.getItem(`${STORAGE_PREFIX}${id}`);
+        if (!raw) return null;
+        const entry = JSON.parse(raw);
+        return entry?.data || null;
+      } catch (storageError) {
+        console.warn('Impossible de charger la campagne depuis le stockage local :', storageError);
+        return null;
+      }
+    }
   }
 
   /* ------------------------------------------------
      LIST   → returns array of {id, name, createdAt}
   ------------------------------------------------ */
   async function list() {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const tx      = db.transaction(STORE_NAME, 'readonly');
-      const req     = tx.objectStore(STORE_NAME).getAll();
-      req.onsuccess = (e) => resolve(
-        e.target.result.map(({ id, name, createdAt }) => ({ id, name, createdAt }))
-      );
-      req.onerror   = (e) => reject(e.target.error);
-    });
+    try {
+      const db = await openDB();
+      return await new Promise((resolve, reject) => {
+        const tx      = db.transaction(STORE_NAME, 'readonly');
+        const req     = tx.objectStore(STORE_NAME).getAll();
+        req.onsuccess = (e) => resolve(
+          e.target.result.map(({ id, name, createdAt }) => ({ id, name, createdAt }))
+        );
+        req.onerror   = (e) => reject(e.target.error);
+      });
+    } catch (error) {
+      const campaigns = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || !key.startsWith(STORAGE_PREFIX)) continue;
+        try {
+          const entry = JSON.parse(localStorage.getItem(key));
+          campaigns.push({ id: entry.id, name: entry.name || 'Campagne', createdAt: entry.createdAt || 0 });
+        } catch (e) {
+          // ignore invalid entries
+        }
+      }
+      return campaigns.sort((a, b) => b.createdAt - a.createdAt);
+    }
   }
 
   /* ------------------------------------------------
      REMOVE
   ------------------------------------------------ */
   async function remove(id) {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const tx  = db.transaction(STORE_NAME, 'readwrite');
-      const req = tx.objectStore(STORE_NAME).delete(id);
-      req.onsuccess = () => resolve();
-      req.onerror   = (e) => reject(e.target.error);
-    });
+    try {
+      const db = await openDB();
+      return await new Promise((resolve, reject) => {
+        const tx  = db.transaction(STORE_NAME, 'readwrite');
+        const req = tx.objectStore(STORE_NAME).delete(id);
+        req.onsuccess = () => resolve();
+        req.onerror   = (e) => reject(e.target.error);
+      });
+    } catch (error) {
+      localStorage.removeItem(`${STORAGE_PREFIX}${id}`);
+    }
   }
 
   /* ------------------------------------------------
@@ -114,11 +155,18 @@ const CampaignStore = (() => {
   ------------------------------------------------ */
   function encodeToBase64(data) {
     const json = JSON.stringify(data);
-    return btoa(unescape(encodeURIComponent(json)));
+    const bytes = new TextEncoder().encode(json);
+    let binary = '';
+    bytes.forEach((byte) => {
+      binary += String.fromCharCode(byte);
+    });
+    return btoa(binary);
   }
 
   function decodeFromBase64(b64) {
-    const json = decodeURIComponent(escape(atob(b64)));
+    const binary = atob(b64);
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    const json = new TextDecoder().decode(bytes);
     return JSON.parse(json);
   }
 
