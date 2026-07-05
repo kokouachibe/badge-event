@@ -62,11 +62,11 @@ const orgState = {
   numberColor: '#38bdf8',
   numberFont: 'Arial Bold',
   numberPrefix: 'Participant N°',
-  startNumber: 1,
-  activeDrag: null
+  startNumber: 1
 };
 
-let activeDrag = null; // for participant canvas drag
+let activeDrag = null;    // drag state for badge generator canvas
+let orgActiveDrag = null; // drag state for organizer canvas
 
 /* =============================================
    BUILT-IN FRAMES (generated as canvas-drawn frames)
@@ -1542,6 +1542,15 @@ function generateCampaignLink() {
   orgState.showNumberOnBadge = document.getElementById('orgShowNumberOnBadge').checked;
   orgState.numberPrefix = document.getElementById('orgNumberPrefix').value;
   orgState.startNumber = parseInt(document.getElementById('orgStartNumber').value) || 1;
+  orgState.numberColor = document.getElementById('orgNumberColor').value;
+  orgState.numberSize = parseInt(document.getElementById('orgNumberSize').value) || 45;
+  orgState.numberFont = document.getElementById('orgNumberFont').value;
+  // nameColor / nameSize / nameFont
+  orgState.nameColor = document.getElementById('orgNameColor').value;
+  orgState.nameSize = parseInt(document.getElementById('orgNameSize').value) || 55;
+  orgState.nameFont = document.getElementById('orgNameFont').value;
+  // Note : orgState.numberX, orgState.numberY, orgState.nameX, orgState.nameY
+  // sont mis à jour par le drag & drop — on les lit directement depuis orgState.
 
   if (!orgState.eventName) {
     showToast("Erreur", "Le nom de l'événement est requis.", "error");
