@@ -53,25 +53,27 @@ window.addEventListener('load', () => {
    LOAD CAMPAIGN DATA (from Hash parameter)
    ============================================= */
 function checkUrlParameters() {
-  const hash = window.location.hash;
+  const hash = window.location.hash || '';
+  const cleanHash = hash.startsWith('#') ? hash.slice(1) : hash;
 
-  if (hash.startsWith('#event=')) {
-    const eventB64 = decodeURIComponent(hash.slice('#event='.length));
+  if (cleanHash.startsWith('event=')) {
+    const eventB64 = cleanHash.slice('event='.length);
     if (!eventB64) return;
     try {
-      const data = CampaignStore.decodeFromBase64UrlSafe(eventB64);
+      const decoded = decodeURIComponent(eventB64);
+      const data = CampaignStore.decodeFromBase64UrlSafe(decoded);
       migrateEventToLocal(data);
       bootParticipantMode(data);
     } catch (e) {
       console.error('URL decoding failed:', e);
       showToast('Lien invalide', "Les paramètres de l'événement sont corrompus.", 'error');
     }
-  } else if (hash.startsWith('#id=')) {
+  } else if (cleanHash.startsWith('id=')) {
     const campaignId = hash.slice('#id='.length);
     if (!campaignId) return;
     fetchCampaignFromNpoint(campaignId);
-  } else if (hash.startsWith('#lid=')) {
-    const localId = hash.slice('#lid='.length);
+  } else if (cleanHash.startsWith('lid=')) {
+    const localId = cleanHash.slice('lid='.length);
     if (!localId) return;
     fetchCampaignFromLocal(localId);
   } else {
