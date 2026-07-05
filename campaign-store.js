@@ -163,6 +163,13 @@ const CampaignStore = (() => {
     return btoa(binary);
   }
 
+  function encodeToBase64UrlSafe(data) {
+    return encodeToBase64(data)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/g, '');
+  }
+
   function decodeFromBase64(b64) {
     const binary = atob(b64);
     const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
@@ -170,8 +177,19 @@ const CampaignStore = (() => {
     return JSON.parse(json);
   }
 
+  function decodeFromBase64UrlSafe(b64) {
+    let normalized = (b64 || '').trim();
+    if (!normalized) throw new Error('Empty payload');
+    normalized = normalized.replace(/-/g, '+').replace(/_/g, '/');
+    const pad = normalized.length % 4;
+    if (pad) {
+      normalized += '='.repeat(4 - pad);
+    }
+    return decodeFromBase64(normalized);
+  }
+
   /* ------------------------------------------------
      PUBLIC API
   ------------------------------------------------ */
-  return { save, load, list, remove, generateShortId, encodeToBase64, decodeFromBase64, openDB };
+  return { save, load, list, remove, generateShortId, encodeToBase64, encodeToBase64UrlSafe, decodeFromBase64, decodeFromBase64UrlSafe, openDB };
 })();

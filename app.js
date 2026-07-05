@@ -1348,9 +1348,9 @@ function compressFrameForURL(img, callback) {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   
-  // 150x150 JPEG (quality 0.45) — réservé au fallback URL (#event=)
-  // ATTENTION : JPEG ne supporte pas la transparence !
-  const size = 150;
+  // Taille plus petite et encodage plus compact pour garder l’URL compatible
+  // sur les navigateurs mobiles Android qui sont plus sensibles aux URLs longues.
+  const size = 180;
   canvas.width = size;
   canvas.height = size;
   
@@ -1361,7 +1361,7 @@ function compressFrameForURL(img, callback) {
   const y = (size - h) / 2;
   
   ctx.drawImage(img, x, y, w, h);
-  callback(canvas.toDataURL('image/jpeg', 0.45));
+  callback(canvas.toDataURL('image/webp', 0.72));
 }
 
 /**
@@ -1650,7 +1650,7 @@ async function generateCampaignLink() {
       console.warn('Sauvegarde locale impossible, utilisation du lien universel :', e.message || e);
     }
 
-    const b64 = CampaignStore.encodeToBase64(campaignData);
+    const b64 = CampaignStore.encodeToBase64UrlSafe(campaignData);
     const linkHash = `#event=${encodeURIComponent(b64)}`;
     const link = getParticipantPageUrl(linkHash);
 
