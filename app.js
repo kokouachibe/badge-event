@@ -296,6 +296,9 @@ function initFrames() {
 }
 
 function loadFirstFrame() {
+  const hasCampaign = new URLSearchParams(window.location.search).has('event');
+  if (hasCampaign) return; // Skip loading default built-in frame if in campaign mode
+
   const firstFrame = BUILT_IN_FRAMES[0];
   const frameCanvas = generateFrameCanvas(firstFrame, 1000);
   const img = new Image();
@@ -2196,6 +2199,9 @@ function showToast(title, message, type = 'success') {
    ON LOAD – draw preview with frame only
    ============================================= */
 window.addEventListener('load', () => {
+  const hasCampaign = new URLSearchParams(window.location.search).has('event');
+  if (hasCampaign) return; // Skip default initial preview loading if in campaign mode
+
   // Auto-trigger initial preview with just the frame
   setTimeout(() => {
     const frame = BUILT_IN_FRAMES[0];
